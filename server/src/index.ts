@@ -51,8 +51,8 @@ io.on("connection", (socket) => {
     console.log(`👤 ${trimmed} joined (${socket.id})`);
   });
 
-  socket.on("input", ({ x, y }) => {
-    room.setInput(socket.id, x, y);
+  socket.on("input", ({ x, y, jump }) => {
+    room.setInput(socket.id, x, y, jump);
   });
 
   // ── Admin events ─────────────────────────────────────────────────────────
