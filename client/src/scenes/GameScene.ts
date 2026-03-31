@@ -59,9 +59,12 @@ const JUMP_BTN_X_OFF = 80; // from right edge
 const JUMP_BTN_Y_OFF = 80; // from bottom edge
 
 export class GameScene extends Phaser.Scene {
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
-  private spaceKey!: Phaser.Input.Keyboard.Key;
+  // ── Manual keyboard tracking (avoids Phaser global capture issues) ───────
+  private keysDown = new Set<string>();
+  private jumpPending = false;
+  private keydownHandler!: (e: KeyboardEvent) => void;
+  private keyupHandler!: (e: KeyboardEvent) => void;
+
   private playerSprites: Record<string, PlayerSprite> = {};
   private zoneRects: Record<string, Phaser.GameObjects.Rectangle> = {};
   /** Zone letters – hidden in lobby */
@@ -87,29 +90,33 @@ export class GameScene extends Phaser.Scene {
   private prevPhase: RoomPhase = "lobby";
   private prevAlive: Set<string> = new Set();
 
-  // keyboard event cleanup ref
-  private keydownHandler!: (e: KeyboardEvent) => void;
 
   constructor() {
     super({ key: "GameScene" });
   }
 
   create() {
-    // ── Fix Phaser keyboard capture ──────────────────────────────────────
-    // Phaser calls preventDefault() on all key events globally, which breaks
-    // typing in form inputs. We disable that and handle it ourselves.
-    this.input.keyboard!.disableGlobalCapture();
-
-    // Manually prevent default only for game keys when no form is focused
-    const GAME_KEYS = new Set([
+    // ── Manual keyboard tracking ──────────────────────────────────────────
+    // We do NOT use Phaser's keyboard plugin (disableGlobalCapture breaks
+    // isDown; enableGlobalCapture blocks form typing). Instead we track
+    // key state ourselves on the window, skipping game input when a form
+    // element has focus so the user can type normally.
+    const GAME_CODES = new Set([
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
-      "Space", "KeyW", "KeyA", "KeyS", "KeyD",
+      "KeyW", "KeyA", "KeyS", "KeyD", "Space",
     ]);
     this.keydownHandler = (e: KeyboardEvent) => {
-      if (this.isTypingInForm()) return;
-      if (GAME_KEYS.has(e.code)) e.preventDefault();
+      if (!GAME_CODES.has(e.code)) return;
+      if (this.isTypingInForm()) return;   // let form input proceed normally
+      e.preventDefault();                  // stop page scroll etc.
+      this.keysDown.add(e.code);
+      if (e.code === "Space" && !e.repeat) this.jumpPending = true;
     };
-    window.addEventListener("keydown", this.keydownHandler, { capture: true });
+    this.keyupHandler = (e: KeyboardEvent) => {
+      this.keysDown.delete(e.code);
+    };
+    window.addEventListener("keydown", this.keydownHandler);
+    window.addEventListener("keyup",   this.keyupHandler);
 
     // ── Grass background ─────────────────────────────────────────────────
     this.add.rectangle(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 0x2d6a4f).setDepth(0);
@@ -141,16 +148,6 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setAlpha(0.35).setDepth(3).setVisible(false);
       this.zoneLabels.push(lbl);
     }
-
-    // ── Keyboard input ───────────────────────────────────────────────────
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.wasd = {
-      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
-    this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     // ── Virtual joystick visuals ─────────────────────────────────────────
     const joyY = MAP_H - JOY_Y_OFF;
@@ -225,9 +222,10 @@ export class GameScene extends Phaser.Scene {
 
     onState((state) => this.syncPlayers(state));
 
-    // clean up listener when scene shuts down
+    // clean up listeners when scene shuts down
     this.events.on("shutdown", () => {
-      window.removeEventListener("keydown", this.keydownHandler, { capture: true } as EventListenerOptions);
+      window.removeEventListener("keydown", this.keydownHandler);
+      window.removeEventListener("keyup",   this.keyupHandler);
     });
   }
 
@@ -239,14 +237,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    const formFocused = this.isTypingInForm();
-
-    const kb = formFocused ? { x: 0, y: 0 } : this.getKeyboardInput();
+    const kb = this.getKeyboardInput();
 
     // Keyboard takes priority over joystick
     const x = kb.x !== 0 ? kb.x : this.joyDelta.x;
     const y = kb.y !== 0 ? kb.y : this.joyDelta.y;
-    const jump = !formFocused && (Phaser.Input.Keyboard.JustDown(this.spaceKey) || this.touchJump);
+
+    // Jump: space key (one-shot) OR touch jump button
+    const jump = this.jumpPending || this.touchJump;
+    this.jumpPending = false;
     this.touchJump = false;
 
     if (jump) sfx.sfxJump();
@@ -505,10 +504,11 @@ export class GameScene extends Phaser.Scene {
 
   private getKeyboardInput(): { x: number; y: number } {
     let x = 0, y = 0;
-    if (this.cursors.left.isDown  || this.wasd.A.isDown) x -= 1;
-    if (this.cursors.right.isDown || this.wasd.D.isDown) x += 1;
-    if (this.cursors.up.isDown    || this.wasd.W.isDown) y -= 1;
-    if (this.cursors.down.isDown  || this.wasd.S.isDown) y += 1;
+    const k = this.keysDown;
+    if (k.has("ArrowLeft")  || k.has("KeyA")) x -= 1;
+    if (k.has("ArrowRight") || k.has("KeyD")) x += 1;
+    if (k.has("ArrowUp")    || k.has("KeyW")) y -= 1;
+    if (k.has("ArrowDown")  || k.has("KeyS")) y += 1;
     if (x !== 0 && y !== 0) { const l = Math.hypot(x, y); x /= l; y /= l; }
     return { x, y };
   }

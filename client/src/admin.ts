@@ -64,8 +64,8 @@ export function initAdminPanel() {
 
     <h3>⚙ Admin Panel</h3>
 
-    <label>Admin Key</label>
-    <input type="password" id="admin-key" placeholder="secret" />
+    <label>Admin Key <span style="font-weight:normal;color:#666">(default: <code style="color:#aaa">secret</code> — set <code style="color:#aaa">ADMIN_KEY</code> env var to change)</span></label>
+    <input type="password" id="admin-key" placeholder="secret" value="secret" />
 
     <!-- ── Full question form ──────────────────────── -->
     <h4>Question</h4>
