@@ -63,12 +63,25 @@
       z-index: 10;
       display: flex;
       justify-content: space-between;
+      align-items: center;
       padding: 8px 16px;
       background: rgba(0,0,0,.55);
       backdrop-filter: blur(4px);
       font-size: .9rem;
       pointer-events: none;
     }
+    #mute-btn {
+      pointer-events: auto;
+      background: none;
+      border: 1px solid rgba(255,255,255,.3);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 1.1rem;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    #mute-btn:hover { border-color: #fff; }
     #hud .phase {
       padding: 4px 12px;
       border-radius: 4px;
@@ -120,6 +133,7 @@
     <div id="hud">
       <span id="phase-badge" class="phase phase-lobby">LOBBY</span>
       <span id="player-count">Players: 0</span>
+      <button id="mute-btn" title="Toggle sound">🔊</button>
     </div>
 
     <!-- Question overlay -->

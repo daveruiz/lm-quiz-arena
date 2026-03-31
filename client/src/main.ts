@@ -5,6 +5,7 @@ import { MAP_W, MAP_H } from "./config";
 import { connect, onState } from "./network";
 import type { RoomState } from "./network";
 import { initAdminPanel } from "./admin";
+import { toggleMute } from "./audio";
 
 // ── UI references ────────────────────────────────────────────────────────────
 const joinScreen = document.getElementById("join-screen")!;
@@ -100,4 +101,11 @@ joinBtn.addEventListener("click", () => {
 
 nicknameInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") joinBtn.click();
+});
+
+// ── Mute button ──────────────────────────────────────────────────────────────
+const muteBtn = document.getElementById("mute-btn");
+muteBtn?.addEventListener("click", () => {
+  const muted = toggleMute();
+  muteBtn.textContent = muted ? "🔇" : "🔊";
 });

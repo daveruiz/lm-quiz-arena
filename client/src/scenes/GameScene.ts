@@ -1,8 +1,9 @@
-// ─── Phaser GameScene: ¾ top-down with jump physics + collisions ────────────
+// ─── Phaser GameScene: ¾ top-down with physics, facing, and sounds ──────────
 import Phaser from "phaser";
 import { MAP_W, MAP_H, ZONES, ZONE_COLORS } from "../config";
 import { onState, getMyId, sendInput } from "../network";
-import type { Player, RoomState } from "../network";
+import type { Player, RoomState, RoomPhase } from "../network";
+import * as sfx from "../audio";
 
 // ── Character dimensions ─────────────────────────────────────────────────────
 const CHAR = {
@@ -13,36 +14,38 @@ const CHAR = {
   shadowRy: 4,
 };
 
+/**
+ * Eye positions for each facing direction (relative to head center).
+ * 0=down (toward camera), 1=left, 2=up (away), 3=right
+ */
+const EYE_POSITIONS: Record<number, { lx: number; ly: number; rx: number; ry: number; size: number }> = {
+  0: { lx: -3, ly: 1,  rx: 3,  ry: 1,  size: 1.5 }, // facing down — eyes visible
+  1: { lx: -5, ly: 0,  rx: -2, ry: 0,  size: 1.3 }, // facing left — eyes shift left
+  2: { lx: -2, ly: -2, rx: 2,  ry: -2, size: 0.8 }, // facing up — eyes barely visible
+  3: { lx: 2,  ly: 0,  rx: 5,  ry: 0,  size: 1.3 }, // facing right — eyes shift right
+};
+
 /** Visual representation of a player */
 interface PlayerSprite {
-  /** Container for body parts (head, torso, etc.) — gets lifted for jumps */
   bodyGroup: Phaser.GameObjects.Container;
-  /** Shadow stays on the ground (not inside bodyGroup) */
   shadow: Phaser.GameObjects.Ellipse;
-  /** Outer container that holds shadow + bodyGroup, positioned at ground (x,y) */
   root: Phaser.GameObjects.Container;
-  /** References for recoloring */
   bodyRect: Phaser.GameObjects.Rectangle;
   head: Phaser.GameObjects.Arc;
   highlight: Phaser.GameObjects.Rectangle;
+  eyeL: Phaser.GameObjects.Arc;
+  eyeR: Phaser.GameObjects.Arc;
   label: Phaser.GameObjects.Text;
-  /** Lerp targets */
+  currentFacing: number;
   targetX: number;
   targetY: number;
   targetZ: number;
-  /** Current visual Z for smooth jump rendering */
   visualZ: number;
-  /** Was airborne last frame (for landing squash) */
   wasAirborne: boolean;
-  /** Squash/stretch animation timer */
   squashTimer: number;
-  /** Stomp reaction timer (client-side animation countdown) */
   stompReactTimer: number;
-  /** Bump reaction timer */
   bumpReactTimer: number;
-  /** Stars/dizzy effect container (shown when stomped) */
   starsEffect: Phaser.GameObjects.Container | null;
-  /** Exclamation effect (shown when bumped) */
   bumpEffect: Phaser.GameObjects.Text | null;
 }
 
@@ -65,6 +68,11 @@ export class GameScene extends Phaser.Scene {
   private touchId: number | null = null;
   private touchOrigin: { x: number; y: number } | null = null;
 
+  /** Track previous phase for sound triggers */
+  private prevPhase: RoomPhase = "lobby";
+  /** Track which players were alive last frame (for death sfx) */
+  private prevAlive: Set<string> = new Set();
+
   constructor() {
     super({ key: "GameScene" });
   }
@@ -73,7 +81,6 @@ export class GameScene extends Phaser.Scene {
     // ── Grass background ─────────────────────────────────────────────────
     this.add.rectangle(MAP_W / 2, MAP_H / 2, MAP_W, MAP_H, 0x2d6a4f).setDepth(0);
 
-    // Grid
     const g = this.add.graphics().setDepth(0);
     g.lineStyle(1, 0x3a7d5a, 0.25);
     for (let x = 0; x <= MAP_W; x += 32) { g.moveTo(x, 0); g.lineTo(x, MAP_H); }
@@ -86,19 +93,16 @@ export class GameScene extends Phaser.Scene {
       const cx = zone.x + zone.w / 2;
       const cy = zone.y + zone.h / 2;
 
-      // Platform side (depth)
       this.add.rectangle(cx, cy + 6, zone.w, zone.h,
         Phaser.Display.Color.ValueToColor(color).darken(40).color, 0.5
       ).setDepth(1);
 
-      // Platform top
       const rect = this.add
         .rectangle(cx, cy, zone.w, zone.h, color, 0.35)
         .setStrokeStyle(2, color)
         .setDepth(2);
       this.zoneRects[label] = rect;
 
-      // Letter
       this.add.text(cx, cy - 8, label, {
         fontSize: "56px", fontFamily: "monospace",
         color: "#ffffff", fontStyle: "bold",
@@ -121,7 +125,6 @@ export class GameScene extends Phaser.Scene {
         this.touchId = p.pointerId;
         this.touchOrigin = { x: p.x, y: p.y };
       } else {
-        // Second finger = jump
         this.touchJump = true;
       }
     });
@@ -148,11 +151,9 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // ── State listener ───────────────────────────────────────────────────
     onState((state) => this.syncPlayers(state));
   }
 
-  /** Check if a form element has focus (admin panel inputs, etc.) */
   private isTypingInForm(): boolean {
     const el = document.activeElement;
     if (!el) return false;
@@ -161,7 +162,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    // Skip game input if user is typing in a form (admin panel)
     const formFocused = this.isTypingInForm();
 
     const kb = formFocused ? { x: 0, y: 0 } : this.getKeyboardInput();
@@ -170,6 +170,9 @@ export class GameScene extends Phaser.Scene {
     const jump = !formFocused && (Phaser.Input.Keyboard.JustDown(this.spaceKey) || this.touchJump);
     this.touchJump = false;
 
+    // Play jump sound for local player
+    if (jump) sfx.sfxJump();
+
     if (x !== this.lastSentX || y !== this.lastSentY || jump) {
       sendInput(x, y, jump);
       this.lastSentX = x;
@@ -177,54 +180,50 @@ export class GameScene extends Phaser.Scene {
       this.lastSentJump = jump;
     }
 
-    // Animate sprites
     const dt = delta / 1000;
     for (const sprite of Object.values(this.playerSprites)) {
       // Lerp ground position
       sprite.root.x += (sprite.targetX - sprite.root.x) * LERP;
       sprite.root.y += (sprite.targetY - sprite.root.y) * LERP;
 
-      // Lerp Z (jump height)
+      // Lerp Z
       sprite.visualZ += (sprite.targetZ - sprite.visualZ) * Z_LERP;
       const isAirborne = sprite.visualZ > 1;
 
-      // Lift the body group up by Z
       sprite.bodyGroup.y = -sprite.visualZ;
 
-      // Shadow: shrink when high, grow when low
+      // Shadow
       const shadowScale = Math.max(0.4, 1 - sprite.visualZ / 60);
       sprite.shadow.setScale(shadowScale, shadowScale * 0.7);
       sprite.shadow.setAlpha(0.3 * shadowScale);
 
-      // Squash & stretch animation
+      // Squash & stretch
       if (sprite.wasAirborne && !isAirborne && sprite.squashTimer <= 0) {
-        // Just landed — trigger squash
         sprite.squashTimer = 0.15;
+        sfx.sfxLand(); // land sound
       }
       sprite.wasAirborne = isAirborne;
 
       if (sprite.squashTimer > 0) {
         sprite.squashTimer -= dt;
         const t = sprite.squashTimer / 0.15;
-        // Squash: wide + short
         sprite.bodyGroup.setScale(1 + t * 0.25, 1 - t * 0.2);
       } else if (isAirborne && sprite.targetZ > 5) {
-        // Stretch while rising
         sprite.bodyGroup.setScale(0.9, 1.1);
       } else {
         sprite.bodyGroup.setScale(1, 1);
       }
 
-      // ── Stomp reaction: flatten + spin stars ──────────────────────────
+      // ── Facing: animate eyes ─────────────────────────────────────────
+      this.updateEyes(sprite);
+
+      // ── Stomp reaction ───────────────────────────────────────────────
       if (sprite.stompReactTimer > 0) {
         sprite.stompReactTimer -= dt;
         const t = Math.max(0, sprite.stompReactTimer);
-        // Flatten the body (squashed under weight)
-        const flatness = Math.min(1, t * 4); // ramps up quickly
+        const flatness = Math.min(1, t * 4);
         sprite.bodyGroup.setScale(1 + flatness * 0.4, 1 - flatness * 0.35);
-        // Wobble side to side
         sprite.bodyGroup.x = Math.sin(t * 30) * 2 * flatness;
-        // Show stars
         if (sprite.starsEffect) {
           sprite.starsEffect.setVisible(true);
           sprite.starsEffect.setAlpha(flatness);
@@ -237,13 +236,11 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // ── Bump reaction: flash + shake ──────────────────────────────────
+      // ── Bump reaction ────────────────────────────────────────────────
       if (sprite.bumpReactTimer > 0) {
         sprite.bumpReactTimer -= dt;
         const t = Math.max(0, sprite.bumpReactTimer);
-        // Quick horizontal shake
         sprite.bodyGroup.x = Math.sin(t * 50) * 3 * (t / 0.3);
-        // Show "!" briefly
         if (sprite.bumpEffect) {
           sprite.bumpEffect.setVisible(true);
           sprite.bumpEffect.setAlpha(Math.min(1, t * 5));
@@ -255,15 +252,51 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Depth sort by Y
       sprite.root.setDepth(100 + Math.round(sprite.root.y));
     }
+  }
+
+  /** Smoothly move eyes to match facing direction */
+  private updateEyes(sprite: PlayerSprite) {
+    const headY = -CHAR.bodyH - CHAR.headR + 1;
+    const target = EYE_POSITIONS[sprite.currentFacing] || EYE_POSITIONS[0];
+    const speed = 0.25;
+
+    sprite.eyeL.x += (target.lx - sprite.eyeL.x) * speed;
+    sprite.eyeL.y += (headY + target.ly - sprite.eyeL.y) * speed;
+    sprite.eyeR.x += (target.rx - sprite.eyeR.x) * speed;
+    sprite.eyeR.y += (headY + target.ry - sprite.eyeR.y) * speed;
+
+    // Scale eyes (smaller when facing away)
+    const currentScale = sprite.eyeL.scaleX;
+    const targetScale = target.size / 1.5;
+    const newScale = currentScale + (targetScale - currentScale) * speed;
+    sprite.eyeL.setScale(newScale);
+    sprite.eyeR.setScale(newScale);
   }
 
   // ── Sync ────────────────────────────────────────────────────────────────
 
   private syncPlayers(state: RoomState) {
     const myId = getMyId();
+
+    // ── Phase-change sounds ──────────────────────────────────────────────
+    if (state.phase !== this.prevPhase) {
+      if (state.phase === "inQuestion") sfx.sfxQuestionStart();
+      if (state.phase === "revealed") sfx.sfxReveal();
+      if (state.phase === "lobby" && this.prevPhase !== "lobby") sfx.sfxReset();
+      this.prevPhase = state.phase;
+    }
+
+    // ── Death sounds ─────────────────────────────────────────────────────
+    const currentAlive = new Set<string>();
+    for (const [id, p] of Object.entries(state.players)) {
+      if (p.status === "alive") currentAlive.add(id);
+      if (this.prevAlive.has(id) && p.status === "dead") {
+        sfx.sfxDeath();
+      }
+    }
+    this.prevAlive = currentAlive;
 
     // Zone highlights
     for (const [label, rect] of Object.entries(this.zoneRects)) {
@@ -300,14 +333,17 @@ export class GameScene extends Phaser.Scene {
       sprite.targetX = player.x;
       sprite.targetY = player.y;
       sprite.targetZ = player.z;
+      sprite.currentFacing = player.facing;
 
-      // Trigger stomp reaction when server says so (only on rising edge)
+      // Trigger stomp reaction (rising edge)
       if (player.stompedTimer > 8 && sprite.stompReactTimer <= 0) {
         sprite.stompReactTimer = 0.5;
+        sfx.sfxStomp();
       }
       // Trigger bump reaction
       if (player.bumpedTimer > 4 && sprite.bumpReactTimer <= 0 && sprite.stompReactTimer <= 0) {
         sprite.bumpReactTimer = 0.3;
+        sfx.sfxBump();
       }
 
       this.applyVisuals(sprite, player, id === myId);
@@ -350,10 +386,8 @@ export class GameScene extends Phaser.Scene {
     const darkColor = Phaser.Display.Color.ValueToColor(baseColor).darken(30).color;
     const highlightColor = Phaser.Display.Color.ValueToColor(baseColor).lighten(15).color;
 
-    // -- Shadow (stays at ground level, outside bodyGroup) --
     const shadow = this.add.ellipse(0, 2, CHAR.shadowRx * 2, CHAR.shadowRy * 2, 0x000000, 0.3);
 
-    // -- Body parts (inside bodyGroup, lifted by Z) --
     const bodyRect = this.add.rectangle(0, -CHAR.bodyH / 2 - 1, CHAR.bodyW, CHAR.bodyH, baseColor);
     bodyRect.setStrokeStyle(1.5, darkColor);
 
@@ -367,18 +401,16 @@ export class GameScene extends Phaser.Scene {
     const head = this.add.circle(0, headY, CHAR.headR, headColor);
     head.setStrokeStyle(1.5, darkColor);
 
-    // Eyes
+    // Eyes (will be animated based on facing)
     const eyeL = this.add.circle(-3, headY + 1, 1.5, 0x222222);
     const eyeR = this.add.circle(3, headY + 1, 1.5, 0x222222);
 
-    // Nickname
     const label = this.add.text(0, headY - CHAR.headR - 10, player.nickname, {
       fontSize: "10px", fontFamily: "sans-serif",
       color: isMe ? "#ffd700" : "#ffffff",
       stroke: "#000000", strokeThickness: 3,
     }).setOrigin(0.5);
 
-    // Me indicator
     const bodyParts: Phaser.GameObjects.GameObject[] = [bodyRect, highlight, head, eyeL, eyeR, label];
     if (isMe) {
       const arrow = this.add.text(0, headY - CHAR.headR - 22, "▼", {
@@ -389,7 +421,7 @@ export class GameScene extends Phaser.Scene {
 
     const bodyGroup = this.add.container(0, 0, bodyParts);
 
-    // ── Stars effect (for stomp reaction) ──────────────────────────────
+    // Stars effect
     const starsContainer = this.add.container(0, headY - CHAR.headR - 14);
     const starChars = ["★", "☆", "✦"];
     for (let s = 0; s < 3; s++) {
@@ -403,7 +435,7 @@ export class GameScene extends Phaser.Scene {
     }
     starsContainer.setVisible(false);
 
-    // ── Bump exclamation effect ────────────────────────────────────────
+    // Bump effect
     const bumpEffect = this.add.text(0, headY - CHAR.headR - 14, "!", {
       fontSize: "14px", fontStyle: "bold",
       color: "#ff4444", stroke: "#000", strokeThickness: 3,
@@ -414,7 +446,8 @@ export class GameScene extends Phaser.Scene {
 
     return {
       root, bodyGroup, shadow,
-      bodyRect, head, highlight, label,
+      bodyRect, head, highlight, eyeL, eyeR, label,
+      currentFacing: player.facing || 0,
       targetX: player.x,
       targetY: player.y,
       targetZ: player.z || 0,

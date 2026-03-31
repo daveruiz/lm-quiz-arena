@@ -75,6 +75,7 @@ class Room {
       inputX: 0,
       inputY: 0,
       jumpRequested: false,
+      facing: 0, // default: facing down (toward camera)
       stompedTimer: 0,
       bumpedTimer: 0,
     };
@@ -119,6 +120,15 @@ class Room {
       // Horizontal movement
       p.x += p.inputX * speed;
       p.y += p.inputY * speed;
+
+      // Update facing direction based on dominant input axis
+      if (Math.abs(p.inputX) > 0.1 || Math.abs(p.inputY) > 0.1) {
+        if (Math.abs(p.inputY) >= Math.abs(p.inputX)) {
+          p.facing = p.inputY > 0 ? 0 : 2; // 0=down, 2=up
+        } else {
+          p.facing = p.inputX < 0 ? 1 : 3; // 1=left, 3=right
+        }
+      }
 
       // Jump initiation (only from ground)
       if (p.jumpRequested && p.z < 0.5) {

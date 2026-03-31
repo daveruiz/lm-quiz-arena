@@ -18,6 +18,8 @@ export interface Player {
   inputX: number;
   inputY: number;
   jumpRequested: boolean;
+  /** Facing direction: 0=down, 1=left, 2=up, 3=right */
+  facing: number;
   /** >0 means this player just got stomped on */
   stompedTimer: number;
   /** >0 means this player just got bumped */

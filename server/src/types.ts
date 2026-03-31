@@ -27,6 +27,8 @@ export interface Player {
   inputY: number;
   /** Whether the player is requesting a jump */
   jumpRequested: boolean;
+  /** Facing direction: 0=down, 1=left, 2=up, 3=right */
+  facing: number;
   /** Ticks remaining for "got stomped" reaction (server decrements each tick) */
   stompedTimer: number;
   /** Ticks remaining for "bumped" reaction (horizontal collision) */
