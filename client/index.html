@@ -2,11 +2,139 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Quiz Arena</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+    /* ── Join screen ─────────────────────────────── */
+    #join-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 16px;
+    }
+    #join-screen h1 {
+      font-size: 2.4rem;
+      color: #e94560;
+      text-shadow: 0 0 20px rgba(233,69,96,.4);
+    }
+    #join-screen input {
+      font-size: 1.2rem;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 2px solid #e94560;
+      background: #16213e;
+      color: #eee;
+      width: 260px;
+      text-align: center;
+      outline: none;
+    }
+    #join-screen button {
+      font-size: 1.1rem;
+      padding: 10px 32px;
+      border-radius: 8px;
+      border: none;
+      background: #e94560;
+      color: #fff;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background .2s;
+    }
+    #join-screen button:hover { background: #c73650; }
+
+    /* ── Game container ───────────────────────────── */
+    #game-container { display: none; position: relative; }
+    #game-container.active { display: block; }
+
+    /* ── HUD overlay ─────────────────────────────── */
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(4px);
+      font-size: .9rem;
+      pointer-events: none;
+    }
+    #hud .phase {
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .phase-lobby    { background: #0f3460; }
+    .phase-inQuestion { background: #e94560; }
+    .phase-revealed { background: #16c79a; }
+
+    /* ── Question overlay ─────────────────────────── */
+    #question-overlay {
+      display: none;
+      position: fixed;
+      bottom: 16px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(6px);
+      border: 1px solid #e94560;
+      border-radius: 12px;
+      padding: 12px 20px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+    }
+    #question-overlay.active { display: block; }
+    #question-overlay h2 { font-size: 1.1rem; margin-bottom: 8px; }
+    #question-overlay .options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: .9rem; }
+    #question-overlay .opt { padding: 6px; border-radius: 6px; }
+    .opt-A { background: #e94560; }
+    .opt-B { background: #0f3460; }
+    .opt-C { background: #e9a045; }
+    .opt-D { background: #16c79a; }
+    #timer { font-size: 1.4rem; font-weight: bold; margin-top: 6px; }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <!-- Join screen -->
+  <div id="join-screen">
+    <h1>Quiz Arena</h1>
+    <input id="nickname-input" type="text" maxlength="16" placeholder="Enter nickname" autofocus />
+    <button id="join-btn">Join Game</button>
+  </div>
+
+  <!-- Game area -->
+  <div id="game-container">
+    <!-- HUD -->
+    <div id="hud">
+      <span id="phase-badge" class="phase phase-lobby">LOBBY</span>
+      <span id="player-count">Players: 0</span>
+    </div>
+
+    <!-- Question overlay -->
+    <div id="question-overlay">
+      <h2 id="q-text"></h2>
+      <div class="options">
+        <div class="opt opt-A" id="opt-A"></div>
+        <div class="opt opt-B" id="opt-B"></div>
+        <div class="opt opt-C" id="opt-C"></div>
+        <div class="opt opt-D" id="opt-D"></div>
+      </div>
+      <div id="timer"></div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
