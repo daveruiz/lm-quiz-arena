@@ -4,6 +4,7 @@ import { GameScene } from "./scenes/GameScene";
 import { MAP_W, MAP_H } from "./config";
 import { connect, onState } from "./network";
 import type { RoomState } from "./network";
+import { initAdminPanel } from "./admin";
 
 // ── UI references ────────────────────────────────────────────────────────────
 const joinScreen = document.getElementById("join-screen")!;
@@ -85,6 +86,9 @@ async function joinGame(nickname: string) {
 
   // Wire up HUD updates
   onState(updateHUD);
+
+  // Initialize admin panel if ?admin=1
+  initAdminPanel();
 }
 
 // ── Join flow ────────────────────────────────────────────────────────────────
