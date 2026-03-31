@@ -3,10 +3,11 @@
   "private": true,
   "version": "0.0.1",
   "description": "Multiplayer quiz arena – move to the correct zone to survive!",
+  "workspaces": ["server", "client"],
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
-    "build": "pnpm -r build",
-    "start": "pnpm --filter server start"
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm start --workspace=server"
   },
   "engines": {
     "node": ">=18"
