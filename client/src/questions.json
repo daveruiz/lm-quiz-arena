@@ -1,0 +1,42 @@
+[
+  {
+    "text": "What is the largest planet in the Solar System?",
+    "A": "Earth",
+    "B": "Saturn",
+    "C": "Mars",
+    "D": "Jupiter",
+    "correctZone": "D"
+  },
+  {
+    "text": "Which language runs natively in every web browser?",
+    "A": "Python",
+    "B": "Java",
+    "C": "JavaScript",
+    "D": "Swift",
+    "correctZone": "C"
+  },
+  {
+    "text": "How many sides does a hexagon have?",
+    "A": "5",
+    "B": "7",
+    "C": "8",
+    "D": "6",
+    "correctZone": "D"
+  },
+  {
+    "text": "Which company manufactures the PlayStation console?",
+    "A": "Microsoft",
+    "B": "Nintendo",
+    "C": "Sony",
+    "D": "Sega",
+    "correctZone": "C"
+  },
+  {
+    "text": "In what year was the first iPhone released?",
+    "A": "2005",
+    "B": "2006",
+    "C": "2007",
+    "D": "2008",
+    "correctZone": "C"
+  }
+]

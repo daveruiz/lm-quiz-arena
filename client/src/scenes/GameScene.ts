@@ -51,14 +51,9 @@ const LERP = 0.35;
 const Z_LERP = 0.5;
 
 // ── Virtual joystick constants ────────────────────────────────────────────────
-const JOY_BASE_R = 45;
-const JOY_STICK_R = 20;
-const JOY_MAX_DIST = 35;
-const JOY_X = 80;   // from left edge of canvas
-const JOY_Y_OFF = 80; // from bottom edge
-const JUMP_BTN_R = 28;
-const JUMP_BTN_X_OFF = 80; // from right edge
-const JUMP_BTN_Y_OFF = 80; // from bottom edge
+const JOY_BASE_R  = 45;  // px – radius of base ring
+const JOY_STICK_R = 20;  // px – radius of stick knob
+const JOY_MAX_DIST = 35; // px – max stick travel from origin
 
 export class GameScene extends Phaser.Scene {
   // ── Manual keyboard tracking (avoids Phaser global capture issues) ───────
@@ -88,11 +83,16 @@ export class GameScene extends Phaser.Scene {
   private touchJump = false;
   private jumpBtnId: number | null = null;
 
-  // ── Joystick graphics ────────────────────────────────────────────────────
-  private joyBase!: Phaser.GameObjects.Arc;
-  private joyStick!: Phaser.GameObjects.Arc;
-  private jumpBtn!: Phaser.GameObjects.Arc;
-  private jumpBtnLabel!: Phaser.GameObjects.Text;
+  // ── HTML touch control elements ──────────────────────────────────────────
+  private touchOverlayEl!: HTMLElement;
+  private joyBaseEl!: HTMLElement;
+  private joyStickEl!: HTMLElement;
+  private jumpBtnEl!: HTMLElement;
+
+  // ── Pointer event handlers (stored for removal on shutdown) ─────────────
+  private pointerdownHandler!: (e: PointerEvent) => void;
+  private pointermoveHandler!: (e: PointerEvent) => void;
+  private pointerupHandler!: (e: PointerEvent) => void;
 
   private prevPhase: RoomPhase = "lobby";
   private prevAlive: Set<string> = new Set();
@@ -123,12 +123,13 @@ export class GameScene extends Phaser.Scene {
       this.keysDown.add(e.code);
       if (e.code === "Space" && !e.repeat) this.jumpPending = true;
       // Keyboard in use → hide touch controls (touch can re-show them)
-      if (this.joyBase.visible) {
-        this.joyBase.setVisible(false);
-        this.joyStick.setVisible(false);
-        this.jumpBtn.setVisible(false);
-        this.jumpBtnLabel.setVisible(false);
+      if (this.touchEverUsed) {
         this.touchEverUsed = false;
+        if (this.touchOverlayEl) this.touchOverlayEl.style.display = "none";
+        // Reset joystick state too
+        this.joyActive = false;
+        this.joyId = null;
+        this.joyDelta = { x: 0, y: 0 };
       }
     };
     this.keyupHandler = (e: KeyboardEvent) => {
@@ -174,87 +175,87 @@ export class GameScene extends Phaser.Scene {
       this.zoneLabels[label] = lbl;
     }
 
-    // ── Virtual joystick visuals (hidden until first touch) ─────────────
-    const joyY = MAP_H - JOY_Y_OFF;
-    this.joyBase = this.add.circle(JOY_X, joyY, JOY_BASE_R, 0xffffff, 0.15)
-      .setStrokeStyle(2, 0xffffff, 0.4)
-      .setDepth(200)
-      .setScrollFactor(0)
-      .setVisible(false);
-    this.joyStick = this.add.circle(JOY_X, joyY, JOY_STICK_R, 0xffffff, 0.45)
-      .setDepth(201)
-      .setScrollFactor(0)
-      .setVisible(false);
+    // ── HTML touch controls ──────────────────────────────────────────────
+    // Controls live outside the Phaser canvas as position:fixed HTML elements.
+    // This means they work in portrait mode and are not clipped by the canvas.
+    this.touchOverlayEl = document.getElementById("touch-overlay")!;
+    this.joyBaseEl      = document.getElementById("joy-base-html")!;
+    this.joyStickEl     = document.getElementById("joy-stick-html")!;
+    this.jumpBtnEl      = document.getElementById("jump-btn-html")!;
 
-    const jumpX = MAP_W - JUMP_BTN_X_OFF;
-    const jumpY = MAP_H - JUMP_BTN_Y_OFF;
-    this.jumpBtn = this.add.circle(jumpX, jumpY, JUMP_BTN_R, 0xffd700, 0.4)
-      .setStrokeStyle(2, 0xffd700, 0.7)
-      .setDepth(200)
-      .setScrollFactor(0)
-      .setVisible(false);
-    this.jumpBtnLabel = this.add.text(jumpX, jumpY, "▲", {
-      fontSize: "18px", color: "#ffffff",
-    }).setOrigin(0.5).setDepth(201).setScrollFactor(0).setVisible(false);
+    /** True if a pointer target is a UI widget we should not intercept */
+    const isUiTarget = (t: EventTarget | null): boolean => {
+      if (!t) return false;
+      return !!(t as HTMLElement).closest(
+        "#hud, #admin-panel, #chat-bar, #qr-modal",
+      );
+    };
 
-    // ── Touch input ──────────────────────────────────────────────────────
-    this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      // Reveal controls on first touch
+    /** Reposition an element so its centre is at (cx, cy) in viewport coords */
+    const centreAt = (el: HTMLElement, r: number, cx: number, cy: number) => {
+      el.style.left = `${cx - r}px`;
+      el.style.top  = `${cy - r}px`;
+    };
+
+    this.pointerdownHandler = (e: PointerEvent) => {
+      // Only react to touch (mouse/pen uses keyboard path)
+      if (e.pointerType !== "touch") return;
+      if (isUiTarget(e.target)) return;
+
+      // Reveal overlay on first touch
       if (!this.touchEverUsed) {
         this.touchEverUsed = true;
-        this.joyBase.setVisible(true);
-        this.joyStick.setVisible(true);
-        this.jumpBtn.setVisible(true);
-        this.jumpBtnLabel.setVisible(true);
+        this.touchOverlayEl.style.display = "block";
       }
-      const jumpX = MAP_W - JUMP_BTN_X_OFF;
-      const jumpY = MAP_H - JUMP_BTN_Y_OFF;
-      const dj = Math.hypot(p.x - jumpX, p.y - jumpY);
 
-      if (dj <= JUMP_BTN_R + 10 && this.jumpBtnId === null) {
-        // Hit the jump button
-        this.jumpBtnId = p.pointerId;
+      if (e.target === this.jumpBtnEl && this.jumpBtnId === null) {
+        // Jump button pressed
+        this.jumpBtnId = e.pointerId;
         this.touchJump = true;
-        this.jumpBtn.setFillStyle(0xffd700, 0.75);
-      } else if (this.joyId === null) {
-        // Start joystick anywhere else
-        this.joyId = p.pointerId;
-        this.joyOrigin = { x: p.x, y: p.y };
-        // Snap base to touch point
-        this.joyBase.setPosition(p.x, p.y);
-        this.joyStick.setPosition(p.x, p.y);
+        this.jumpBtnEl.classList.add("pressed");
+      } else if (this.joyId === null && e.target !== this.jumpBtnEl) {
+        // Joystick: snap base to touch point
+        this.joyId = e.pointerId;
+        this.joyOrigin = { x: e.clientX, y: e.clientY };
+        centreAt(this.joyBaseEl,  JOY_BASE_R,  e.clientX, e.clientY);
+        centreAt(this.joyStickEl, JOY_STICK_R, e.clientX, e.clientY);
         this.joyActive = true;
       }
-    });
+    };
 
-    this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (p.pointerId !== this.joyId || !this.joyActive) return;
-      const dx = p.x - this.joyOrigin.x;
-      const dy = p.y - this.joyOrigin.y;
+    this.pointermoveHandler = (e: PointerEvent) => {
+      if (e.pointerId !== this.joyId || !this.joyActive) return;
+      const dx = e.clientX - this.joyOrigin.x;
+      const dy = e.clientY - this.joyOrigin.y;
       const dist = Math.hypot(dx, dy);
       const clamped = Math.min(dist, JOY_MAX_DIST);
       const angle = Math.atan2(dy, dx);
-      const sx = this.joyOrigin.x + Math.cos(angle) * clamped;
-      const sy = this.joyOrigin.y + Math.sin(angle) * clamped;
-      this.joyStick.setPosition(sx, sy);
-      this.joyDelta.x = dist > 8 ? (dx / dist) : 0;
-      this.joyDelta.y = dist > 8 ? (dy / dist) : 0;
-    });
+      centreAt(
+        this.joyStickEl, JOY_STICK_R,
+        this.joyOrigin.x + Math.cos(angle) * clamped,
+        this.joyOrigin.y + Math.sin(angle) * clamped,
+      );
+      this.joyDelta.x = dist > 8 ? dx / dist : 0;
+      this.joyDelta.y = dist > 8 ? dy / dist : 0;
+    };
 
-    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
-      if (p.pointerId === this.joyId) {
-        this.joyId = null;
+    this.pointerupHandler = (e: PointerEvent) => {
+      if (e.pointerId === this.joyId) {
+        this.joyId     = null;
         this.joyActive = false;
-        this.joyDelta = { x: 0, y: 0 };
-        // Reset visuals to default position
-        this.joyBase.setPosition(JOY_X, MAP_H - JOY_Y_OFF);
-        this.joyStick.setPosition(JOY_X, MAP_H - JOY_Y_OFF);
+        this.joyDelta  = { x: 0, y: 0 };
+        // Snap stick back to base centre
+        centreAt(this.joyStickEl, JOY_STICK_R, this.joyOrigin.x, this.joyOrigin.y);
       }
-      if (p.pointerId === this.jumpBtnId) {
+      if (e.pointerId === this.jumpBtnId) {
         this.jumpBtnId = null;
-        this.jumpBtn.setFillStyle(0xffd700, 0.4);
+        this.jumpBtnEl.classList.remove("pressed");
       }
-    });
+    };
+
+    document.addEventListener("pointerdown", this.pointerdownHandler);
+    document.addEventListener("pointermove", this.pointermoveHandler);
+    document.addEventListener("pointerup",   this.pointerupHandler);
 
     onState((state) => this.syncPlayers(state));
 
@@ -317,6 +318,9 @@ export class GameScene extends Phaser.Scene {
     this.events.on("shutdown", () => {
       window.removeEventListener("keydown", this.keydownHandler);
       window.removeEventListener("keyup",   this.keyupHandler);
+      document.removeEventListener("pointerdown", this.pointerdownHandler);
+      document.removeEventListener("pointermove", this.pointermoveHandler);
+      document.removeEventListener("pointerup",   this.pointerupHandler);
     });
   }
 
