@@ -1,6 +1,8 @@
 // ─── Quiz Arena Server ──────────────────────────────────────────────────────
 import express from "express";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import cors from "cors";
 import { room } from "./room.js";
@@ -10,11 +12,18 @@ const PORT = Number(process.env.PORT) || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY || "secret";
 const TICK_RATE = 20; // Hz
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
 app.use(cors());
 
-// In production, serve the built client from ../client/dist
-// app.use(express.static("../client/dist"));
+// In production, serve the built client as static files
+const clientDist = path.resolve(__dirname, "../../client/dist");
+app.use(express.static(clientDist));
+// SPA fallback: serve index.html for any non-API route
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(clientDist, "index.html"));
+});
 
 const server = http.createServer(app);
 
