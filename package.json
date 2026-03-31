@@ -1,0 +1,14 @@
+{
+  "name": "quiz-arena",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Multiplayer quiz arena – move to the correct zone to survive!",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter server start"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
