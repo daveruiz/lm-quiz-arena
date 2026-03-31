@@ -73,8 +73,8 @@ export class GameScene extends Phaser.Scene {
   private zoneLabels:  Record<string, Phaser.GameObjects.Text> = {};
 
   /** Tweened zone size – updated every frame to drive zone rect sizes */
-  private zoneSizeObj  = { size: MAX_ZONE_SIZE };
-  private lastZoneSize = MAX_ZONE_SIZE;
+  private zoneSizeObj  = { size: 0 };
+  private lastZoneSize = 0;
 
   private lastSentX = 0;
   private lastSentY = 0;

@@ -72,7 +72,7 @@ class Room {
   phase: RoomPhase = "lobby";
   players: Record<string, Player> = {};
   question: Question | null = null;
-  zoneSize: number = MAX_ZONE_SIZE;
+  zoneSize: number = 0; // 0 = hidden in lobby; computed at startQuestion
 
   // ── Player management ──────────────────────────────────────────────────
 
@@ -302,6 +302,7 @@ class Room {
   reset() {
     this.phase = "lobby";
     this.question = null;
+    this.zoneSize = 0;
     for (const p of Object.values(this.players)) {
       p.status = "alive";
       p.x = SPAWN_X + (Math.random() - 0.5) * 60;
