@@ -20,6 +20,10 @@ export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
   private playerSprites: Record<string, PlayerSprite> = {};
+  /** Zone rectangles so we can highlight on reveal */
+  private zoneRects: Record<string, Phaser.GameObjects.Rectangle> = {};
+  /** Current phase for zone highlighting */
+  private currentPhase: string = "lobby";
 
   /** Previous input sent to server (avoid spamming identical packets) */
   private lastSentX = 0;
@@ -52,10 +56,11 @@ export class GameScene extends Phaser.Scene {
     // ── Answer zones ─────────────────────────────────────────────────────
     for (const [label, zone] of Object.entries(ZONES)) {
       const color = ZONE_COLORS[label];
-      this.add
+      const rect = this.add
         .rectangle(zone.x + zone.w / 2, zone.y + zone.h / 2, zone.w, zone.h, color, 0.35)
         .setStrokeStyle(3, color)
         .setDepth(1);
+      this.zoneRects[label] = rect;
 
       this.add
         .text(zone.x + zone.w / 2, zone.y + zone.h / 2, label, {
@@ -138,6 +143,25 @@ export class GameScene extends Phaser.Scene {
 
   private syncPlayers(state: RoomState) {
     const myId = getMyId();
+    this.currentPhase = state.phase;
+
+    // Highlight correct zone on reveal
+    for (const [label, rect] of Object.entries(this.zoneRects)) {
+      const color = ZONE_COLORS[label];
+      if (state.phase === "revealed" && state.question?.correctZone === label) {
+        // Correct zone: bright pulse
+        rect.setFillStyle(color, 0.7);
+        rect.setStrokeStyle(5, 0xffffff);
+      } else if (state.phase === "revealed" && state.question) {
+        // Wrong zone: dim
+        rect.setFillStyle(color, 0.1);
+        rect.setStrokeStyle(2, color);
+      } else {
+        // Normal
+        rect.setFillStyle(color, 0.35);
+        rect.setStrokeStyle(3, color);
+      }
+    }
 
     // Remove departed players
     for (const id of Object.keys(this.playerSprites)) {
