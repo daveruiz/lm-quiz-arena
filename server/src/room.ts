@@ -6,10 +6,10 @@ export const MAP_W = 800;
 export const MAP_H = 600;
 
 // ── Physics constants ────────────────────────────────────────────────────────
-const SPEED = 5;             // px/tick ground movement
-const AIR_SPEED = 3;         // px/tick movement while airborne (less control)
-const JUMP_VZ = 12;          // initial upward velocity on jump
-const GRAVITY = 0.8;         // downward acceleration per tick
+const SPEED = 7;             // px/tick ground movement
+const AIR_SPEED = 4;         // px/tick movement while airborne (less control)
+const JUMP_VZ = 9;           // initial upward velocity on jump (shorter arc)
+const GRAVITY = 1.2;         // downward acceleration per tick (snappier fall)
 const BOUNCE_FACTOR = 0.3;   // how much velocity transfers on landing bounce
 const PLAYER_RADIUS = 10;    // collision radius
 const PUSH_FORCE = 4;        // base push strength on collision

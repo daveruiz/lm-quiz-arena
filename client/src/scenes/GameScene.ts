@@ -152,12 +152,22 @@ export class GameScene extends Phaser.Scene {
     onState((state) => this.syncPlayers(state));
   }
 
+  /** Check if a form element has focus (admin panel inputs, etc.) */
+  private isTypingInForm(): boolean {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el as HTMLElement).isContentEditable;
+  }
+
   update(_time: number, delta: number) {
-    // Input
-    const kb = this.getKeyboardInput();
+    // Skip game input if user is typing in a form (admin panel)
+    const formFocused = this.isTypingInForm();
+
+    const kb = formFocused ? { x: 0, y: 0 } : this.getKeyboardInput();
     const x = kb.x !== 0 ? kb.x : this.touchInput.x;
     const y = kb.y !== 0 ? kb.y : this.touchInput.y;
-    const jump = Phaser.Input.Keyboard.JustDown(this.spaceKey) || this.touchJump;
+    const jump = !formFocused && (Phaser.Input.Keyboard.JustDown(this.spaceKey) || this.touchJump);
     this.touchJump = false;
 
     if (x !== this.lastSentX || y !== this.lastSentY || jump) {
