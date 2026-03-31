@@ -1,6 +1,6 @@
 // ─── Phaser GameScene ────────────────────────────────────────────────────────
 import Phaser from "phaser";
-import { MAP_W, MAP_H, ZONES, ZONE_COLORS } from "../config";
+import { MAP_W, MAP_H, ZONE_CENTERS, ZONE_COLORS, MAX_ZONE_SIZE } from "../config";
 import { onState, getMyId, sendInput, sendChat } from "../network";
 import type { Player, RoomState, RoomPhase } from "../network";
 import * as sfx from "../audio";
@@ -68,9 +68,13 @@ export class GameScene extends Phaser.Scene {
   private keyupHandler!: (e: KeyboardEvent) => void;
 
   private playerSprites: Record<string, PlayerSprite> = {};
-  private zoneRects: Record<string, Phaser.GameObjects.Rectangle> = {};
-  /** Zone letters – hidden in lobby */
-  private zoneLabels: Phaser.GameObjects.Text[] = [];
+  private zoneShadows: Record<string, Phaser.GameObjects.Rectangle> = {};
+  private zoneRects:   Record<string, Phaser.GameObjects.Rectangle> = {};
+  private zoneLabels:  Record<string, Phaser.GameObjects.Text> = {};
+
+  /** Tweened zone size – updated every frame to drive zone rect sizes */
+  private zoneSizeObj  = { size: MAX_ZONE_SIZE };
+  private lastZoneSize = MAX_ZONE_SIZE;
 
   private lastSentX = 0;
   private lastSentY = 0;
@@ -98,6 +102,10 @@ export class GameScene extends Phaser.Scene {
     super({ key: "GameScene" });
   }
 
+  preload() {
+    this.load.image("lm-logo", "/assets/lm-logo.png");
+  }
+
   create() {
     // ── Manual keyboard tracking ──────────────────────────────────────────
     // We do NOT use Phaser's keyboard plugin (disableGlobalCapture breaks
@@ -114,6 +122,14 @@ export class GameScene extends Phaser.Scene {
       e.preventDefault();                  // stop page scroll etc.
       this.keysDown.add(e.code);
       if (e.code === "Space" && !e.repeat) this.jumpPending = true;
+      // Keyboard in use → hide touch controls (touch can re-show them)
+      if (this.joyBase.visible) {
+        this.joyBase.setVisible(false);
+        this.joyStick.setVisible(false);
+        this.jumpBtn.setVisible(false);
+        this.jumpBtnLabel.setVisible(false);
+        this.touchEverUsed = false;
+      }
     };
     this.keyupHandler = (e: KeyboardEvent) => {
       this.keysDown.delete(e.code);
@@ -129,27 +145,33 @@ export class GameScene extends Phaser.Scene {
     for (let y = 0; y <= MAP_H; y += 32) { g.moveTo(0, y); g.lineTo(MAP_W, y); }
     g.strokePath();
 
-    // ── Answer zone platforms ────────────────────────────────────────────
-    for (const [label, zone] of Object.entries(ZONES)) {
-      const color = ZONE_COLORS[label];
-      const cx = zone.x + zone.w / 2;
-      const cy = zone.y + zone.h / 2;
+    // ── Launchmetrics logo (arena watermark) ─────────────────────────────
+    const logo = this.add.image(MAP_W / 2, MAP_H / 2, "lm-logo");
+    const scale = Math.min((MAP_W * 0.55) / logo.width, (MAP_H * 0.3) / logo.height);
+    logo.setScale(scale).setAlpha(0.07).setDepth(1);
 
-      this.add.rectangle(cx, cy + 6, zone.w, zone.h,
-        Phaser.Display.Color.ValueToColor(color).darken(40).color, 0.5,
-      ).setDepth(1);
+    // ── Answer zone platforms (sizes driven by zoneSizeObj, tweened) ─────
+    for (const [label, center] of Object.entries(ZONE_CENTERS)) {
+      const color = ZONE_COLORS[label];
+      const s = this.zoneSizeObj.size;
+
+      const shadow = this.add
+        .rectangle(center.x, center.y + 6, s, s,
+          Phaser.Display.Color.ValueToColor(color).darken(40).color, 0.5)
+        .setDepth(1);
+      this.zoneShadows[label] = shadow;
 
       const rect = this.add
-        .rectangle(cx, cy, zone.w, zone.h, color, 0.35)
+        .rectangle(center.x, center.y, s, s, color, 0.35)
         .setStrokeStyle(2, color)
         .setDepth(2);
       this.zoneRects[label] = rect;
 
-      const lbl = this.add.text(cx, cy - 8, label, {
+      const lbl = this.add.text(center.x, center.y - 8, label, {
         fontSize: "56px", fontFamily: "monospace",
         color: "#ffffff", fontStyle: "bold",
       }).setOrigin(0.5).setAlpha(0.35).setDepth(3).setVisible(false);
-      this.zoneLabels.push(lbl);
+      this.zoneLabels[label] = lbl;
     }
 
     // ── Virtual joystick visuals (hidden until first touch) ─────────────
@@ -243,8 +265,9 @@ export class GameScene extends Phaser.Scene {
 
     const openChat = () => {
       chatBar.classList.add("active");
-      chatHint.classList.remove("active");
-      chatInput.focus();
+      chatHint?.classList.remove("active");
+      // defer focus so button-click event fully resolves before we steal focus
+      setTimeout(() => chatInput.focus(), 0);
     };
     const closeChat = () => {
       chatBar.classList.remove("active");
@@ -304,7 +327,23 @@ export class GameScene extends Phaser.Scene {
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el as HTMLElement).isContentEditable;
   }
 
+  /** Reposition and resize all zone rects from the current (tweened) size */
+  private updateZoneRects(size: number) {
+    for (const [label, center] of Object.entries(ZONE_CENTERS)) {
+      const shadow = this.zoneShadows[label];
+      const rect   = this.zoneRects[label];
+      const lbl    = this.zoneLabels[label];
+      if (!shadow || !rect || !lbl) continue;
+
+      shadow.setPosition(center.x, center.y + 6).setSize(size, size);
+      rect  .setPosition(center.x, center.y)     .setSize(size, size);
+      lbl   .setPosition(center.x, center.y - 8);
+    }
+  }
+
   update(_time: number, delta: number) {
+    // Drive zone rect geometry from tweened size every frame
+    this.updateZoneRects(this.zoneSizeObj.size);
     const kb = this.getKeyboardInput();
 
     // Keyboard takes priority over joystick
@@ -425,9 +464,20 @@ export class GameScene extends Phaser.Scene {
       this.prevPhase = state.phase;
     }
 
+    // Tween zone size when it changes (new question starts)
+    if (state.zoneSize !== this.lastZoneSize) {
+      this.lastZoneSize = state.zoneSize;
+      this.tweens.add({
+        targets: this.zoneSizeObj,
+        size: state.zoneSize,
+        duration: 900,
+        ease: "Back.Out",
+      });
+    }
+
     // Show zone labels only when a question is active or revealed
     const showLabels = state.phase === "inQuestion" || state.phase === "revealed";
-    for (const lbl of this.zoneLabels) lbl.setVisible(showLabels);
+    for (const lbl of Object.values(this.zoneLabels)) lbl.setVisible(showLabels);
 
     // Zone highlight
     for (const [label, rect] of Object.entries(this.zoneRects)) {

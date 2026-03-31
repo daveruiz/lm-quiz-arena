@@ -3,13 +3,16 @@
 export const MAP_W = 800;
 export const MAP_H = 600;
 
-/** Zone definitions matching server/src/room.ts */
-export const ZONES = {
-  A: { x: 50,  y: 50,  w: 300, h: 200 },
-  B: { x: 450, y: 50,  w: 300, h: 200 },
-  C: { x: 50,  y: 350, w: 300, h: 200 },
-  D: { x: 450, y: 350, w: 300, h: 200 },
-} as const;
+/** Fixed centre of each quadrant – zones grow/shrink around these points */
+export const ZONE_CENTERS: Record<string, { x: number; y: number }> = {
+  A: { x: 200, y: 150 },
+  B: { x: 600, y: 150 },
+  C: { x: 200, y: 450 },
+  D: { x: 600, y: 450 },
+};
+
+export const MIN_ZONE_SIZE = 100;
+export const MAX_ZONE_SIZE = 270;
 
 /** Zone colors for rendering */
 export const ZONE_COLORS: Record<string, number> = {

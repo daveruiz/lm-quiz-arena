@@ -43,6 +43,8 @@ export interface RoomState {
   players: Record<string, Player>;
   question: Question | null;
   timeRemaining: number;
+  /** Side length (px) of each square answer zone */
+  zoneSize: number;
 }
 
 let socket: Socket | null = null;

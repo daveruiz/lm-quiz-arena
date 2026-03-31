@@ -16,13 +16,30 @@ const PUSH_FORCE = 4;        // base push strength on collision
 const STOMP_PUSH = 8;        // extra push when landing on someone
 const BUMP_COOLDOWN = 5;     // ticks before same pair can bump again
 
-/** Zone bounding boxes */
-export const ZONES: Record<Zone, { x: number; y: number; w: number; h: number }> = {
-  A: { x: 50,  y: 50,  w: 300, h: 200 },
-  B: { x: 450, y: 50,  w: 300, h: 200 },
-  C: { x: 50,  y: 350, w: 300, h: 200 },
-  D: { x: 450, y: 350, w: 300, h: 200 },
+// ── Dynamic zone sizing ──────────────────────────────────────────────────────
+/** Zone centres – fixed quadrant midpoints */
+export const ZONE_CENTERS: Record<Zone, { x: number; y: number }> = {
+  A: { x: 200, y: 150 },
+  B: { x: 600, y: 150 },
+  C: { x: 200, y: 450 },
+  D: { x: 600, y: 450 },
 };
+
+/** Side length constraints for square zones */
+export const MIN_ZONE_SIZE = 100;
+export const MAX_ZONE_SIZE = 270; // keeps a ≥20 px gap between adjacent zones
+
+/** Compute square zone side length so ~aliveCount/4 players fit per zone */
+function computeZoneSize(aliveCount: number): number {
+  const s = 60 * Math.sqrt(Math.max(1, aliveCount) / 4) + 50;
+  return Math.max(MIN_ZONE_SIZE, Math.min(MAX_ZONE_SIZE, Math.round(s)));
+}
+
+/** AABB of a zone at the current size */
+function zoneRect(zone: Zone, size: number) {
+  const c = ZONE_CENTERS[zone];
+  return { x: c.x - size / 2, y: c.y - size / 2, w: size, h: size };
+}
 
 const SPAWN_X = MAP_W / 2;
 const SPAWN_Y = MAP_H / 2;
@@ -55,6 +72,7 @@ class Room {
   phase: RoomPhase = "lobby";
   players: Record<string, Player> = {};
   question: Question | null = null;
+  zoneSize: number = MAX_ZONE_SIZE;
 
   // ── Player management ──────────────────────────────────────────────────
 
@@ -263,12 +281,15 @@ class Room {
   startQuestion(q: Omit<Question, "startedAt">) {
     this.phase = "inQuestion";
     this.question = { ...q, startedAt: Date.now() };
+    // Resize zones so alive players barely fit
+    const aliveCount = Object.values(this.players).filter(p => p.status === "alive").length;
+    this.zoneSize = computeZoneSize(aliveCount);
   }
 
   reveal() {
     if (!this.question) return;
     this.phase = "revealed";
-    const correct = ZONES[this.question.correctZone];
+    const correct = zoneRect(this.question.correctZone, this.zoneSize);
     for (const p of Object.values(this.players)) {
       if (p.status !== "alive") continue;
       const inZone =
@@ -303,6 +324,7 @@ class Room {
       players: this.players,
       question: this.question,
       timeRemaining,
+      zoneSize: this.zoneSize,
     };
   }
 }

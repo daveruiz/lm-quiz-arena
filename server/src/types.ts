@@ -54,6 +54,8 @@ export interface RoomState {
   players: Record<string, Player>;
   question: Question | null;
   timeRemaining: number;
+  /** Side length (px) of each square answer zone — changes with player count */
+  zoneSize: number;
 }
 
 // ─── Socket.IO Event Contracts ──────────────────────────────────────────────
