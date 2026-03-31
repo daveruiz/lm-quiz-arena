@@ -78,6 +78,8 @@ class Room {
       facing: 0, // default: facing down (toward camera)
       stompedTimer: 0,
       bumpedTimer: 0,
+      chatMessage: "",
+      chatTimer: 0,
     };
     this.players[id] = player;
     return player;
@@ -99,20 +101,34 @@ class Room {
     if (jump) p.jumpRequested = true;
   }
 
+  setChat(id: string, text: string) {
+    const p = this.players[id];
+    if (!p) return;
+    const clean = text.trim().slice(0, 60);
+    if (!clean) return;
+    p.chatMessage = clean;
+    p.chatTimer = 120; // 6 s at 20 Hz
+  }
+
   // ── Tick (called at ~20 Hz) ────────────────────────────────────────────
 
   tick() {
     const players = Object.values(this.players);
 
-    // 0. Decrement reaction timers
+    // 0. Decrement reaction + chat timers
     for (const p of players) {
       if (p.stompedTimer > 0) p.stompedTimer--;
       if (p.bumpedTimer > 0) p.bumpedTimer--;
+      if (p.chatTimer > 0) {
+        p.chatTimer--;
+        if (p.chatTimer === 0) p.chatMessage = "";
+      }
     }
 
     // 1. Process movement + jump for each player
+    // Dead players become ghosts: they can move freely but skip collisions below.
     for (const p of players) {
-      if (p.status === "dead") continue;
+      if (p.status === "ghost") continue; // spectators who joined mid-game don't move
 
       const isAirborne = p.z > 0.5;
       const speed = isAirborne ? AIR_SPEED : SPEED;

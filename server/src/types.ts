@@ -33,6 +33,10 @@ export interface Player {
   stompedTimer: number;
   /** Ticks remaining for "bumped" reaction (horizontal collision) */
   bumpedTimer: number;
+  /** Active chat message (empty string = none) */
+  chatMessage: string;
+  /** Ticks remaining before chatMessage is cleared */
+  chatTimer: number;
 }
 
 /** The current quiz question (if any) */
@@ -58,6 +62,8 @@ export interface ClientToServerEvents {
   join: (nickname: string) => void;
   /** Movement input + jump flag */
   input: (data: { x: number; y: number; jump?: boolean }) => void;
+  /** Send a chat message (visible as bubble above character) */
+  chat: (data: { text: string }) => void;
   adminStartQuestion: (data: {
     text: string;
     A: string; B: string; C: string; D: string;

@@ -72,6 +72,9 @@ async function joinGame(nickname: string) {
   joinScreen.style.display = "none";
   gameContainer.classList.add("active");
 
+  // Show chat hint
+  document.getElementById("chat-hint")?.classList.add("active");
+
   game = new Phaser.Game({
     type: Phaser.AUTO,
     width: MAP_W,

@@ -117,6 +117,40 @@
     .opt-C { background: #e9a045; }
     .opt-D { background: #16c79a; }
     #timer { font-size: 1.4rem; font-weight: bold; margin-top: 6px; }
+
+    /* ── Chat bar ────────────────────────────────── */
+    #chat-bar {
+      display: none;
+      position: fixed;
+      bottom: 12px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      width: min(340px, 85vw);
+    }
+    #chat-bar.active { display: flex; }
+    #chat-input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,.4);
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(6px);
+      color: #fff;
+      font-size: .95rem;
+      outline: none;
+    }
+    #chat-input:focus { border-color: #e94560; }
+    #chat-hint {
+      display: none;
+      position: fixed;
+      bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      color: rgba(255,255,255,.35);
+      font-size: .75rem;
+      pointer-events: none;
+    }
+    #chat-hint.active { display: block; }
   </style>
 </head>
 <body>
@@ -135,6 +169,12 @@
       <span id="player-count">Players: 0</span>
       <button id="mute-btn" title="Toggle sound">🔊</button>
     </div>
+
+    <!-- Chat bar (Enter to open/send, Escape to cancel) -->
+    <div id="chat-bar">
+      <input id="chat-input" type="text" maxlength="60" placeholder="Say something… (Enter to send)" autocomplete="off" />
+    </div>
+    <div id="chat-hint">Press Enter to chat</div>
 
     <!-- Question overlay -->
     <div id="question-overlay">

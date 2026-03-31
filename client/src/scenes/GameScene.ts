@@ -1,7 +1,7 @@
 // ─── Phaser GameScene ────────────────────────────────────────────────────────
 import Phaser from "phaser";
 import { MAP_W, MAP_H, ZONES, ZONE_COLORS } from "../config";
-import { onState, getMyId, sendInput } from "../network";
+import { onState, getMyId, sendInput, sendChat } from "../network";
 import type { Player, RoomState, RoomPhase } from "../network";
 import * as sfx from "../audio";
 
@@ -43,6 +43,8 @@ interface PlayerSprite {
   bumpReactTimer: number;
   starsEffect: Phaser.GameObjects.Container | null;
   bumpEffect: Phaser.GameObjects.Text | null;
+  chatBubble: Phaser.GameObjects.Text | null;
+  lastChatMessage: string;
 }
 
 const LERP = 0.35;
@@ -222,6 +224,43 @@ export class GameScene extends Phaser.Scene {
 
     onState((state) => this.syncPlayers(state));
 
+    // ── Chat bar keyboard wiring ──────────────────────────────────────────
+    const chatBar   = document.getElementById("chat-bar")!;
+    const chatInput = document.getElementById("chat-input") as HTMLInputElement;
+    const chatHint  = document.getElementById("chat-hint")!;
+
+    const openChat = () => {
+      chatBar.classList.add("active");
+      chatHint.classList.remove("active");
+      chatInput.focus();
+    };
+    const closeChat = () => {
+      chatBar.classList.remove("active");
+      chatHint.classList.add("active");
+      chatInput.value = "";
+      chatInput.blur();
+    };
+    const submitChat = () => {
+      const text = chatInput.value.trim();
+      if (text) sendChat(text);
+      closeChat();
+    };
+
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter")  { e.preventDefault(); submitChat(); }
+      if (e.key === "Escape") { e.preventDefault(); closeChat(); }
+    });
+
+    // Open chat when Enter is pressed outside of any form input
+    // (keydownHandler skips GAME_CODES when in form; Enter isn't a game code,
+    //  so we catch it separately here on the window)
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !this.isTypingInForm()) {
+        e.preventDefault();
+        openChat();
+      }
+    });
+
     // clean up listeners when scene shuts down
     this.events.on("shutdown", () => {
       window.removeEventListener("keydown", this.keydownHandler);
@@ -400,6 +439,22 @@ export class GameScene extends Phaser.Scene {
       sprite.targetZ = player.z;
       sprite.currentFacing = player.facing;
 
+      // Update chat bubble
+      const msg = player.chatMessage || "";
+      if (msg !== sprite.lastChatMessage) {
+        sprite.lastChatMessage = msg;
+        if (msg) {
+          sprite.chatBubble?.setText(msg).setVisible(true);
+        } else {
+          sprite.chatBubble?.setVisible(false);
+        }
+      }
+      // Keep bubble above the head (tracks jump height via visualZ)
+      if (sprite.chatBubble?.visible) {
+        const headTop = -(CHAR.bodyH + CHAR.headR * 2) - sprite.visualZ;
+        sprite.chatBubble.setPosition(0, headTop - 26);
+      }
+
       if (player.stompedTimer > 8 && sprite.stompReactTimer <= 0) {
         sprite.stompReactTimer = 0.5;
         sfx.sfxStomp();
@@ -488,7 +543,20 @@ export class GameScene extends Phaser.Scene {
       stroke: "#000", strokeThickness: 3,
     }).setOrigin(0.5).setVisible(false);
 
-    const root = this.add.container(player.x, player.y, [shadow, bodyGroup, starsContainer, bumpEffect]);
+    // Chat bubble — styled text with background, hidden until a message arrives
+    const chatBubble = this.add.text(0, -(CHAR.bodyH + CHAR.headR * 2) - 26, "", {
+      fontSize: "11px",
+      fontFamily: "sans-serif",
+      color: "#111111",
+      backgroundColor: "#ffffff",
+      padding: { x: 5, y: 3 },
+      wordWrap: { width: 120, useAdvancedWrap: true },
+    })
+      .setOrigin(0.5, 1)
+      .setDepth(210)
+      .setVisible(false);
+
+    const root = this.add.container(player.x, player.y, [shadow, bodyGroup, starsContainer, bumpEffect, chatBubble]);
     root.setDepth(100 + Math.round(player.y));
 
     return {
@@ -499,6 +567,7 @@ export class GameScene extends Phaser.Scene {
       wasAirborne: false, squashTimer: 0,
       stompReactTimer: 0, bumpReactTimer: 0,
       starsEffect: starsContainer, bumpEffect,
+      chatBubble, lastChatMessage: "",
     };
   }
 

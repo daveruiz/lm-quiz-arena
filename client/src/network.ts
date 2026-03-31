@@ -24,6 +24,10 @@ export interface Player {
   stompedTimer: number;
   /** >0 means this player just got bumped */
   bumpedTimer: number;
+  /** Active chat message shown in bubble (empty = none) */
+  chatMessage: string;
+  /** Ticks remaining before chatMessage is cleared */
+  chatTimer: number;
 }
 
 export interface Question {
@@ -77,4 +81,9 @@ export function sendInput(x: number, y: number, jump: boolean = false) {
   } else {
     socket?.emit("input", { x, y });
   }
+}
+
+/** Send a chat message */
+export function sendChat(text: string) {
+  socket?.emit("chat", { text });
 }

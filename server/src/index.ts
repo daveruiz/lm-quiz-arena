@@ -89,6 +89,11 @@ io.on("connection", (socket) => {
     console.log("🔄 Game reset");
   });
 
+  socket.on("chat", (data) => {
+    if (!data?.text || typeof data.text !== "string") return;
+    room.setChat(socket.id, data.text);
+  });
+
   socket.on("disconnect", () => {
     room.removePlayer(socket.id);
     console.log(`💤 disconnected: ${socket.id}`);
