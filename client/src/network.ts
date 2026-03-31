@@ -18,6 +18,10 @@ export interface Player {
   inputX: number;
   inputY: number;
   jumpRequested: boolean;
+  /** >0 means this player just got stomped on */
+  stompedTimer: number;
+  /** >0 means this player just got bumped */
+  bumpedTimer: number;
 }
 
 export interface Question {

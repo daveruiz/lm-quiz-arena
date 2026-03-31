@@ -27,6 +27,10 @@ export interface Player {
   inputY: number;
   /** Whether the player is requesting a jump */
   jumpRequested: boolean;
+  /** Ticks remaining for "got stomped" reaction (server decrements each tick) */
+  stompedTimer: number;
+  /** Ticks remaining for "bumped" reaction (horizontal collision) */
+  bumpedTimer: number;
 }
 
 /** The current quiz question (if any) */

@@ -36,6 +36,14 @@ interface PlayerSprite {
   wasAirborne: boolean;
   /** Squash/stretch animation timer */
   squashTimer: number;
+  /** Stomp reaction timer (client-side animation countdown) */
+  stompReactTimer: number;
+  /** Bump reaction timer */
+  bumpReactTimer: number;
+  /** Stars/dizzy effect container (shown when stomped) */
+  starsEffect: Phaser.GameObjects.Container | null;
+  /** Exclamation effect (shown when bumped) */
+  bumpEffect: Phaser.GameObjects.Text | null;
 }
 
 const LERP = 0.35;
@@ -197,6 +205,46 @@ export class GameScene extends Phaser.Scene {
         sprite.bodyGroup.setScale(1, 1);
       }
 
+      // ── Stomp reaction: flatten + spin stars ──────────────────────────
+      if (sprite.stompReactTimer > 0) {
+        sprite.stompReactTimer -= dt;
+        const t = Math.max(0, sprite.stompReactTimer);
+        // Flatten the body (squashed under weight)
+        const flatness = Math.min(1, t * 4); // ramps up quickly
+        sprite.bodyGroup.setScale(1 + flatness * 0.4, 1 - flatness * 0.35);
+        // Wobble side to side
+        sprite.bodyGroup.x = Math.sin(t * 30) * 2 * flatness;
+        // Show stars
+        if (sprite.starsEffect) {
+          sprite.starsEffect.setVisible(true);
+          sprite.starsEffect.setAlpha(flatness);
+          sprite.starsEffect.rotation += dt * 4;
+          sprite.starsEffect.y = -sprite.visualZ - CHAR.bodyH - CHAR.headR * 2 - 14;
+        }
+        if (t <= 0) {
+          sprite.bodyGroup.x = 0;
+          if (sprite.starsEffect) sprite.starsEffect.setVisible(false);
+        }
+      }
+
+      // ── Bump reaction: flash + shake ──────────────────────────────────
+      if (sprite.bumpReactTimer > 0) {
+        sprite.bumpReactTimer -= dt;
+        const t = Math.max(0, sprite.bumpReactTimer);
+        // Quick horizontal shake
+        sprite.bodyGroup.x = Math.sin(t * 50) * 3 * (t / 0.3);
+        // Show "!" briefly
+        if (sprite.bumpEffect) {
+          sprite.bumpEffect.setVisible(true);
+          sprite.bumpEffect.setAlpha(Math.min(1, t * 5));
+          sprite.bumpEffect.y = -sprite.visualZ - CHAR.bodyH - CHAR.headR * 2 - 14;
+        }
+        if (t <= 0) {
+          sprite.bodyGroup.x = 0;
+          if (sprite.bumpEffect) sprite.bumpEffect.setVisible(false);
+        }
+      }
+
       // Depth sort by Y
       sprite.root.setDepth(100 + Math.round(sprite.root.y));
     }
@@ -243,7 +291,15 @@ export class GameScene extends Phaser.Scene {
       sprite.targetY = player.y;
       sprite.targetZ = player.z;
 
-      // Recolor from server color (in case it was wrong initially)
+      // Trigger stomp reaction when server says so (only on rising edge)
+      if (player.stompedTimer > 8 && sprite.stompReactTimer <= 0) {
+        sprite.stompReactTimer = 0.5;
+      }
+      // Trigger bump reaction
+      if (player.bumpedTimer > 4 && sprite.bumpReactTimer <= 0 && sprite.stompReactTimer <= 0) {
+        sprite.bumpReactTimer = 0.3;
+      }
+
       this.applyVisuals(sprite, player, id === myId);
     }
   }
@@ -322,7 +378,28 @@ export class GameScene extends Phaser.Scene {
     }
 
     const bodyGroup = this.add.container(0, 0, bodyParts);
-    const root = this.add.container(player.x, player.y, [shadow, bodyGroup]);
+
+    // ── Stars effect (for stomp reaction) ──────────────────────────────
+    const starsContainer = this.add.container(0, headY - CHAR.headR - 14);
+    const starChars = ["★", "☆", "✦"];
+    for (let s = 0; s < 3; s++) {
+      const angle = (s / 3) * Math.PI * 2;
+      const star = this.add.text(
+        Math.cos(angle) * 10, Math.sin(angle) * 6,
+        starChars[s],
+        { fontSize: "10px", color: "#ffff00", stroke: "#000", strokeThickness: 2 }
+      ).setOrigin(0.5);
+      starsContainer.add(star);
+    }
+    starsContainer.setVisible(false);
+
+    // ── Bump exclamation effect ────────────────────────────────────────
+    const bumpEffect = this.add.text(0, headY - CHAR.headR - 14, "!", {
+      fontSize: "14px", fontStyle: "bold",
+      color: "#ff4444", stroke: "#000", strokeThickness: 3,
+    }).setOrigin(0.5).setVisible(false);
+
+    const root = this.add.container(player.x, player.y, [shadow, bodyGroup, starsContainer, bumpEffect]);
     root.setDepth(100 + Math.round(player.y));
 
     return {
@@ -334,6 +411,10 @@ export class GameScene extends Phaser.Scene {
       visualZ: player.z || 0,
       wasAirborne: false,
       squashTimer: 0,
+      stompReactTimer: 0,
+      bumpReactTimer: 0,
+      starsEffect: starsContainer,
+      bumpEffect,
     };
   }
 

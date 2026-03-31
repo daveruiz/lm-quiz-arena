@@ -75,6 +75,8 @@ class Room {
       inputX: 0,
       inputY: 0,
       jumpRequested: false,
+      stompedTimer: 0,
+      bumpedTimer: 0,
     };
     this.players[id] = player;
     return player;
@@ -100,6 +102,12 @@ class Room {
 
   tick() {
     const players = Object.values(this.players);
+
+    // 0. Decrement reaction timers
+    for (const p of players) {
+      if (p.stompedTimer > 0) p.stompedTimer--;
+      if (p.bumpedTimer > 0) p.bumpedTimer--;
+    }
 
     // 1. Process movement + jump for each player
     for (const p of players) {
@@ -193,17 +201,25 @@ class Room {
           b.x += nx * pushB;
           b.y += ny * pushB;
 
+          // Both get a bump reaction
+          a.bumpedTimer = 6;  // ~0.3s at 20Hz
+          b.bumpedTimer = 6;
+
           // Stomp: if one is above the other and falling, extra push + bounce
           if (a.z > b.z + 5 && a.vz < 0) {
             // A is stomping B
             b.x += nx * STOMP_PUSH;
             b.y += ny * STOMP_PUSH;
-            a.vz = JUMP_VZ * 0.6; // A bounces up
+            a.vz = JUMP_VZ * 0.6;
+            b.stompedTimer = 10; // ~0.5s reaction
+            b.bumpedTimer = 0;   // stomp overrides bump
           } else if (b.z > a.z + 5 && b.vz < 0) {
             // B is stomping A
             a.x -= nx * STOMP_PUSH;
             a.y -= ny * STOMP_PUSH;
             b.vz = JUMP_VZ * 0.6;
+            a.stompedTimer = 10;
+            a.bumpedTimer = 0;
           }
 
           // Re-clamp after push
