@@ -6,6 +6,7 @@ import { connect, onState } from "./network";
 import type { RoomState } from "./network";
 import { initAdminPanel } from "./admin";
 import { toggleMute } from "./audio";
+import QRCode from "qrcode";
 
 // ── UI references ────────────────────────────────────────────────────────────
 const joinScreen = document.getElementById("join-screen")!;
@@ -112,3 +113,24 @@ muteBtn?.addEventListener("click", () => {
   const muted = toggleMute();
   muteBtn.textContent = muted ? "🔇" : "🔊";
 });
+
+// ── Share / QR button ─────────────────────────────────────────────────────────
+const shareBtn  = document.getElementById("share-btn")!;
+const qrModal   = document.getElementById("qr-modal")!;
+const qrCanvas  = document.getElementById("qr-canvas") as HTMLCanvasElement;
+const qrUrlEl   = document.getElementById("qr-url")!;
+const qrClose   = document.getElementById("qr-close")!;
+
+const openQR = async () => {
+  // Strip ?admin=1 so players get the plain join URL
+  const url = `${window.location.origin}${window.location.pathname}`;
+  qrUrlEl.textContent = url;
+  await QRCode.toCanvas(qrCanvas, url, { width: 220, margin: 2 });
+  qrModal.classList.add("active");
+};
+const closeQR = () => qrModal.classList.remove("active");
+
+shareBtn.addEventListener("click", openQR);
+qrClose.addEventListener("click", closeQR);
+// Click backdrop to close
+qrModal.addEventListener("click", (e) => { if (e.target === qrModal) closeQR(); });

@@ -70,7 +70,7 @@
       font-size: .9rem;
       pointer-events: none;
     }
-    #mute-btn {
+    #mute-btn, #chat-btn, #share-btn {
       pointer-events: auto;
       background: none;
       border: 1px solid rgba(255,255,255,.3);
@@ -81,7 +81,7 @@
       cursor: pointer;
       transition: border-color .2s;
     }
-    #mute-btn:hover { border-color: #fff; }
+    #mute-btn:hover, #chat-btn:hover, #share-btn:hover { border-color: #fff; }
     #hud .phase {
       padding: 4px 12px;
       border-radius: 4px;
@@ -118,39 +118,69 @@
     .opt-D { background: #16c79a; }
     #timer { font-size: 1.4rem; font-weight: bold; margin-top: 6px; }
 
-    /* ── Chat bar ────────────────────────────────── */
+    /* ── Chat bar (top, under HUD) ───────────────── */
     #chat-bar {
       display: none;
       position: fixed;
-      bottom: 12px; left: 50%;
+      top: 46px; left: 50%;
       transform: translateX(-50%);
       z-index: 20;
-      width: min(340px, 85vw);
+      width: min(380px, 88vw);
     }
     #chat-bar.active { display: flex; }
     #chat-input {
       flex: 1;
-      padding: 8px 12px;
+      padding: 7px 12px;
       border-radius: 8px;
-      border: 2px solid rgba(255,255,255,.4);
-      background: rgba(0,0,0,.75);
+      border: 2px solid #e94560;
+      background: rgba(0,0,0,.82);
       backdrop-filter: blur(6px);
       color: #fff;
-      font-size: .95rem;
+      font-size: .9rem;
       outline: none;
     }
-    #chat-input:focus { border-color: #e94560; }
-    #chat-hint {
+    #chat-input::placeholder { color: rgba(255,255,255,.4); }
+
+    /* ── QR modal ────────────────────────────────── */
+    #qr-modal {
       display: none;
       position: fixed;
-      bottom: 14px; left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      color: rgba(255,255,255,.35);
-      font-size: .75rem;
-      pointer-events: none;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0,0,0,.7);
+      align-items: center;
+      justify-content: center;
     }
-    #chat-hint.active { display: block; }
+    #qr-modal.active { display: flex; }
+    #qr-inner {
+      background: #16213e;
+      border: 1px solid #e94560;
+      border-radius: 14px;
+      padding: 24px 28px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #qr-inner h3 { color: #e94560; margin: 0; font-size: 1.1rem; }
+    #qr-canvas { border-radius: 8px; }
+    #qr-url {
+      font-size: .75rem;
+      color: #aaa;
+      word-break: break-all;
+      max-width: 220px;
+    }
+    #qr-close {
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      background: #0f3460;
+      color: #fff;
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    #qr-close:hover { background: #1a4a80; }
   </style>
 </head>
 <body>
@@ -167,14 +197,27 @@
     <div id="hud">
       <span id="phase-badge" class="phase phase-lobby">LOBBY</span>
       <span id="player-count">Players: 0</span>
-      <button id="mute-btn" title="Toggle sound">🔊</button>
+      <div style="display:flex;gap:6px">
+        <button id="chat-btn"  title="Chat (Enter / T)">💬</button>
+        <button id="mute-btn"  title="Toggle sound (M)">🔊</button>
+        <button id="share-btn" title="Share QR code">📱</button>
+      </div>
     </div>
 
-    <!-- Chat bar (Enter to open/send, Escape to cancel) -->
+    <!-- Chat bar (top, under HUD) -->
     <div id="chat-bar">
-      <input id="chat-input" type="text" maxlength="60" placeholder="Say something… (Enter to send)" autocomplete="off" />
+      <input id="chat-input" type="text" maxlength="60" placeholder="Say something… Enter to send, Esc to close" autocomplete="off" />
     </div>
-    <div id="chat-hint">Press Enter to chat</div>
+
+    <!-- QR share modal -->
+    <div id="qr-modal">
+      <div id="qr-inner">
+        <h3>📱 Scan to join</h3>
+        <canvas id="qr-canvas"></canvas>
+        <p id="qr-url"></p>
+        <button id="qr-close">✕ Close</button>
+      </div>
+    </div>
 
     <!-- Question overlay -->
     <div id="question-overlay">

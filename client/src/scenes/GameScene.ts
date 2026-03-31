@@ -76,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   private lastSentY = 0;
 
   // ── Touch joystick state ──────────────────────────────────────────────────
+  private touchEverUsed = false;   // true once any touch/pointer event fires
   private joyActive = false;
   private joyId: number | null = null;
   private joyOrigin = { x: 0, y: 0 };
@@ -151,28 +152,39 @@ export class GameScene extends Phaser.Scene {
       this.zoneLabels.push(lbl);
     }
 
-    // ── Virtual joystick visuals ─────────────────────────────────────────
+    // ── Virtual joystick visuals (hidden until first touch) ─────────────
     const joyY = MAP_H - JOY_Y_OFF;
     this.joyBase = this.add.circle(JOY_X, joyY, JOY_BASE_R, 0xffffff, 0.15)
       .setStrokeStyle(2, 0xffffff, 0.4)
       .setDepth(200)
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setVisible(false);
     this.joyStick = this.add.circle(JOY_X, joyY, JOY_STICK_R, 0xffffff, 0.45)
       .setDepth(201)
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setVisible(false);
 
     const jumpX = MAP_W - JUMP_BTN_X_OFF;
     const jumpY = MAP_H - JUMP_BTN_Y_OFF;
     this.jumpBtn = this.add.circle(jumpX, jumpY, JUMP_BTN_R, 0xffd700, 0.4)
       .setStrokeStyle(2, 0xffd700, 0.7)
       .setDepth(200)
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setVisible(false);
     this.jumpBtnLabel = this.add.text(jumpX, jumpY, "▲", {
       fontSize: "18px", color: "#ffffff",
-    }).setOrigin(0.5).setDepth(201).setScrollFactor(0);
+    }).setOrigin(0.5).setDepth(201).setScrollFactor(0).setVisible(false);
 
     // ── Touch input ──────────────────────────────────────────────────────
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      // Reveal controls on first touch
+      if (!this.touchEverUsed) {
+        this.touchEverUsed = true;
+        this.joyBase.setVisible(true);
+        this.joyStick.setVisible(true);
+        this.jumpBtn.setVisible(true);
+        this.jumpBtnLabel.setVisible(true);
+      }
       const jumpX = MAP_W - JUMP_BTN_X_OFF;
       const jumpY = MAP_H - JUMP_BTN_Y_OFF;
       const dj = Math.hypot(p.x - jumpX, p.y - jumpY);
@@ -247,19 +259,36 @@ export class GameScene extends Phaser.Scene {
     };
 
     chatInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter")  { e.preventDefault(); submitChat(); }
-      if (e.key === "Escape") { e.preventDefault(); closeChat(); }
+      if (e.key === "Enter") {
+        // stopPropagation prevents the window listener from re-opening chat
+        e.stopPropagation();
+        e.preventDefault();
+        submitChat();
+      }
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        closeChat();
+      }
     });
 
-    // Open chat when Enter is pressed outside of any form input
-    // (keydownHandler skips GAME_CODES when in form; Enter isn't a game code,
-    //  so we catch it separately here on the window)
+    // Global shortcuts: Enter / T → open chat; M → mute toggle
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !this.isTypingInForm()) {
+      if (this.isTypingInForm()) return;
+      if (e.key === "Enter" || e.key === "t" || e.key === "T") {
         e.preventDefault();
         openChat();
       }
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        const muted = sfx.toggleMute();
+        const muteBtn = document.getElementById("mute-btn");
+        if (muteBtn) muteBtn.textContent = muted ? "🔇" : "🔊";
+      }
     });
+
+    // Wire chat HUD button
+    document.getElementById("chat-btn")?.addEventListener("click", openChat);
 
     // clean up listeners when scene shuts down
     this.events.on("shutdown", () => {
@@ -287,8 +316,6 @@ export class GameScene extends Phaser.Scene {
     this.jumpPending = false;
     this.touchJump = false;
 
-    if (jump) sfx.sfxJump();
-
     if (x !== this.lastSentX || y !== this.lastSentY || jump) {
       sendInput(x, y, jump);
       this.lastSentX = x;
@@ -308,7 +335,11 @@ export class GameScene extends Phaser.Scene {
       sprite.shadow.setScale(shadowScale, shadowScale * 0.7);
       sprite.shadow.setAlpha(0.3 * shadowScale);
 
-      // Squash & stretch
+      // Squash & stretch + landing/jump sounds
+      if (!sprite.wasAirborne && isAirborne) {
+        // Just left the ground → actual jump happened
+        sfx.sfxJump();
+      }
       if (sprite.wasAirborne && !isAirborne && sprite.squashTimer <= 0) {
         sprite.squashTimer = 0.15;
         sfx.sfxLand();
