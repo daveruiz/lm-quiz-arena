@@ -69,7 +69,12 @@ let colorIndex = 0;
 const bumpCooldowns: Record<string, number> = {};
 
 /** Internal bot movement state (not sent to clients) */
-interface BotDir { x: number; y: number; timer: number }
+interface BotDir {
+  x: number; y: number;
+  timer: number;
+  /** Zone the bot decided to head toward this question (null = not assigned yet) */
+  targetZone: Zone | null;
+}
 
 class Room {
   phase: RoomPhase = "lobby";
@@ -126,7 +131,7 @@ class Room {
     player.isBot = true;
     // Start moving in a random direction
     const angle = Math.random() * Math.PI * 2;
-    this.botDirs[id] = { x: Math.cos(angle), y: Math.sin(angle), timer: 0 };
+    this.botDirs[id] = { x: Math.cos(angle), y: Math.sin(angle), timer: 0, targetZone: null };
     return player;
   }
 
@@ -158,17 +163,47 @@ class Room {
 
   // ── Bot AI ────────────────────────────────────────────────────────────
   private tickBots() {
+    const ZONES: Zone[] = ["A", "B", "C", "D"];
+
     for (const [id, dir] of Object.entries(this.botDirs)) {
       if (!this.players[id]) { delete this.botDirs[id]; continue; }
-      dir.timer--;
-      if (dir.timer <= 0) {
-        // Pick a new random direction and hold it for 1–3 seconds
-        const angle = Math.random() * Math.PI * 2;
-        dir.x = Math.random() > 0.15 ? Math.cos(angle) : 0; // 15% idle
-        dir.y = Math.random() > 0.15 ? Math.sin(angle) : 0;
-        dir.timer = Math.floor(20 + Math.random() * 40);
+      const p = this.players[id];
+
+      if (this.phase === "inQuestion") {
+        // Pick a random target zone once per question
+        if (!dir.targetZone) {
+          dir.targetZone = ZONES[Math.floor(Math.random() * ZONES.length)];
+        }
+
+        // Steer toward the chosen zone centre
+        const center = ZONE_CENTERS[dir.targetZone];
+        const dx = center.x - p.x;
+        const dy = center.y - p.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 15) {
+          dir.x = dx / dist;
+          dir.y = dy / dist;
+        } else {
+          // Already inside – small random shuffle so bots don't stack
+          dir.x = (Math.random() - 0.5) * 0.4;
+          dir.y = (Math.random() - 0.5) * 0.4;
+        }
+      } else {
+        // Not in a question: clear target so next question gets a fresh pick
+        dir.targetZone = null;
+
+        // Random wandering
+        dir.timer--;
+        if (dir.timer <= 0) {
+          const angle = Math.random() * Math.PI * 2;
+          dir.x = Math.random() > 0.15 ? Math.cos(angle) : 0; // 15% idle
+          dir.y = Math.random() > 0.15 ? Math.sin(angle) : 0;
+          dir.timer = Math.floor(20 + Math.random() * 40);
+        }
       }
-      // ~4% chance to jump each tick (≈ once every 1.25s)
+
+      // ~4% chance to jump each tick (≈ once every 1.25 s)
       const jump = Math.random() < 0.04;
       this.setInput(id, dir.x, dir.y, jump);
     }
