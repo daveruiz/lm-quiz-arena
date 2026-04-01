@@ -89,6 +89,15 @@ io.on("connection", (socket) => {
     console.log("🔄 Game reset");
   });
 
+  socket.on("adminAddBot", (data) => {
+    if (data.adminKey !== ADMIN_KEY) {
+      socket.emit("error", "Invalid admin key");
+      return;
+    }
+    const bot = room.addBot();
+    console.log(`🤖 Bot added: ${bot.nickname}`);
+  });
+
   socket.on("chat", (data) => {
     if (!data?.text || typeof data.text !== "string") return;
     room.setChat(socket.id, data.text);

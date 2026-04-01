@@ -68,11 +68,18 @@ let colorIndex = 0;
 /** Tracks recent collisions to prevent jitter */
 const bumpCooldowns: Record<string, number> = {};
 
+/** Internal bot movement state (not sent to clients) */
+interface BotDir { x: number; y: number; timer: number }
+
 class Room {
   phase: RoomPhase = "lobby";
   players: Record<string, Player> = {};
   question: Question | null = null;
   zoneSize: number = 0; // 0 = hidden in lobby; computed at startQuestion
+
+  // ── Bot tracking ──────────────────────────────────────────────────────
+  private botDirs: Record<string, BotDir> = {};
+  private botCount = 0;
 
   // ── Player management ──────────────────────────────────────────────────
 
@@ -98,13 +105,27 @@ class Room {
       bumpedTimer: 0,
       chatMessage: "",
       chatTimer: 0,
+      score: 0,
     };
     this.players[id] = player;
     return player;
   }
 
+  /** Add a server-controlled bot player */
+  addBot() {
+    this.botCount++;
+    const id = `bot_${this.botCount}`;
+    const player = this.addPlayer(id, `Bot${this.botCount}`);
+    player.isBot = true;
+    // Start moving in a random direction
+    const angle = Math.random() * Math.PI * 2;
+    this.botDirs[id] = { x: Math.cos(angle), y: Math.sin(angle), timer: 0 };
+    return player;
+  }
+
   removePlayer(id: string) {
     delete this.players[id];
+    delete this.botDirs[id]; // clean up bot state if applicable
     // Clean up cooldowns involving this player
     for (const key of Object.keys(bumpCooldowns)) {
       if (key.includes(id)) delete bumpCooldowns[key];
@@ -128,9 +149,28 @@ class Room {
     p.chatTimer = 120; // 6 s at 20 Hz
   }
 
+  // ── Bot AI ────────────────────────────────────────────────────────────
+  private tickBots() {
+    for (const [id, dir] of Object.entries(this.botDirs)) {
+      if (!this.players[id]) { delete this.botDirs[id]; continue; }
+      dir.timer--;
+      if (dir.timer <= 0) {
+        // Pick a new random direction and hold it for 1–3 seconds
+        const angle = Math.random() * Math.PI * 2;
+        dir.x = Math.random() > 0.15 ? Math.cos(angle) : 0; // 15% idle
+        dir.y = Math.random() > 0.15 ? Math.sin(angle) : 0;
+        dir.timer = Math.floor(20 + Math.random() * 40);
+      }
+      // ~4% chance to jump each tick (≈ once every 1.25s)
+      const jump = Math.random() < 0.04;
+      this.setInput(id, dir.x, dir.y, jump);
+    }
+  }
+
   // ── Tick (called at ~20 Hz) ────────────────────────────────────────────
 
   tick() {
+    this.tickBots(); // update bot inputs before physics
     const players = Object.values(this.players);
 
     // 0. Decrement reaction + chat timers
@@ -295,7 +335,11 @@ class Room {
       const inZone =
         p.x >= correct.x && p.x <= correct.x + correct.w &&
         p.y >= correct.y && p.y <= correct.y + correct.h;
-      if (!inZone) p.status = "dead";
+      if (inZone) {
+        p.score++; // correct answer!
+      } else {
+        p.status = "dead";
+      }
     }
   }
 
@@ -305,6 +349,7 @@ class Room {
     this.zoneSize = 0;
     for (const p of Object.values(this.players)) {
       p.status = "alive";
+      p.score = 0; // reset scores on full game reset
       p.x = SPAWN_X + (Math.random() - 0.5) * 60;
       p.y = SPAWN_Y + (Math.random() - 0.5) * 60;
       p.z = 0;

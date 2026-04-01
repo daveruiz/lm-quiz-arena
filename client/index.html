@@ -13,6 +13,7 @@
       overflow: hidden;
       height: 100vh;
       width: 100vw;
+      touch-action: none; /* prevent browser from reclaiming touches for scroll/zoom */
     }
     /* ── Join screen ─────────────────────────────── */
     #join-screen {
@@ -245,6 +246,7 @@
     <div id="hud">
       <span id="phase-badge" class="phase phase-lobby">LOBBY</span>
       <span id="player-count">Players: 0</span>
+      <span id="score-display" style="display:none;font-weight:bold;color:#ffd700">⭐ 0</span>
       <div style="display:flex;gap:6px">
         <button id="chat-btn"  title="Chat (Enter / T)">💬</button>
         <button id="mute-btn"  title="Toggle sound (M)">🔊</button>

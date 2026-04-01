@@ -139,6 +139,10 @@ export function initAdminPanel() {
     <button class="btn-reveal btn-full" id="admin-reveal-btn">✓ Force Reveal</button>
     <button class="btn-reset btn-full" id="admin-reset-btn">↺ Reset Game</button>
 
+    <!-- ── Dev: bots ─────────────────────────────── -->
+    <h4>🤖 Bots</h4>
+    <button class="btn-full" id="btn-add-bot" style="background:#6c5ce7;color:#fff">＋ Add Bot</button>
+
     <!-- ── Dev: quick correct-answer picker ───────── -->
     <h4>🧪 Dev: quick-fire test</h4>
     <div style="font-size:.75rem;color:#888;margin-bottom:4px">
@@ -317,16 +321,20 @@ export function initAdminPanel() {
     });
   });
 
+  // ── Add Bot ───────────────────────────────────────────────────────────────
+  document.getElementById("btn-add-bot")!.addEventListener("click", () => {
+    getSocket()?.emit("adminAddBot" as never, { adminKey: getKey() });
+  });
+
   // ── Live status ───────────────────────────────────────────────────────────
   onState((state: RoomState) => {
     const el = document.getElementById("admin-status");
     if (!el) return;
     const players = Object.values(state.players);
-    const alive  = players.filter((p) => p.status === "alive").length;
-    const dead   = players.filter((p) => p.status === "dead").length;
-    const ghost  = players.filter((p) => p.status === "ghost").length;
+    const alive = players.filter((p) => p.status === "alive").length;
+    const dead  = players.filter((p) => p.status === "dead").length;
     let text = `Phase: <b>${state.phase.toUpperCase()}</b> · ${players.length} players`;
-    text += `<br>✅ ${alive} alive · ☠️ ${dead} dead · 👻 ${ghost} ghost`;
+    text += `<br>✅ ${alive} alive · ☠️ ${dead} dead`;
     if (state.phase === "inQuestion") text += `<br>⏱ ${Math.ceil(state.timeRemaining)}s remaining`;
     el.innerHTML = text;
   });

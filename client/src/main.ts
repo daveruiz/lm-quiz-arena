@@ -2,7 +2,7 @@
 import Phaser from "phaser";
 import { GameScene } from "./scenes/GameScene";
 import { MAP_W, MAP_H } from "./config";
-import { connect, onState } from "./network";
+import { connect, onState, getMyId } from "./network";
 import type { RoomState } from "./network";
 import { initAdminPanel } from "./admin";
 import { toggleMute } from "./audio";
@@ -13,8 +13,9 @@ const joinScreen = document.getElementById("join-screen")!;
 const nicknameInput = document.getElementById("nickname-input") as HTMLInputElement;
 const joinBtn = document.getElementById("join-btn")!;
 const gameContainer = document.getElementById("game-container")!;
-const phaseBadge = document.getElementById("phase-badge")!;
-const playerCount = document.getElementById("player-count")!;
+const phaseBadge    = document.getElementById("phase-badge")!;
+const playerCount   = document.getElementById("player-count")!;
+const scoreDisplay  = document.getElementById("score-display")!;
 const questionOverlay = document.getElementById("question-overlay")!;
 const qText = document.getElementById("q-text")!;
 const optA = document.getElementById("opt-A")!;
@@ -36,6 +37,12 @@ function updateHUD(state: RoomState) {
   const alive = players.filter((p) => p.status === "alive").length;
   const total = players.length;
   playerCount.textContent = `Alive: ${alive} / ${total}`;
+
+  // Score for the local player
+  const myId = getMyId();
+  const myScore = myId ? (state.players[myId]?.score ?? 0) : 0;
+  scoreDisplay.style.display = myId ? "inline" : "none";
+  scoreDisplay.textContent = `⭐ ${myScore}`;
 
   // Question overlay
   if (state.question && (state.phase === "inQuestion" || state.phase === "revealed")) {

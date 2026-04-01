@@ -28,6 +28,8 @@ export interface Player {
   chatMessage: string;
   /** Ticks remaining before chatMessage is cleared */
   chatTimer: number;
+  /** Correct answers scored this session */
+  score: number;
 }
 
 export interface Question {

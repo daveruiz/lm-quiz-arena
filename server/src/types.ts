@@ -37,6 +37,10 @@ export interface Player {
   chatMessage: string;
   /** Ticks remaining before chatMessage is cleared */
   chatTimer: number;
+  /** Number of correct answers this session */
+  score: number;
+  /** True for server-controlled bots (not sent to clients as special; just a flag) */
+  isBot?: boolean;
 }
 
 /** The current quiz question (if any) */
@@ -74,7 +78,8 @@ export interface ClientToServerEvents {
     adminKey: string;
   }) => void;
   adminReveal: (data: { adminKey: string }) => void;
-  adminReset: (data: { adminKey: string }) => void;
+  adminReset:  (data: { adminKey: string }) => void;
+  adminAddBot: (data: { adminKey: string }) => void;
 }
 
 export interface ServerToClientEvents {

@@ -97,6 +97,8 @@ export class GameScene extends Phaser.Scene {
 
   private prevPhase: RoomPhase = "lobby";
   private prevAlive: Set<string> = new Set();
+  /** Tracks our own status to ensure the death sound fires reliably */
+  private prevSelfStatus: string = "alive";
 
 
   constructor() {
@@ -524,8 +526,15 @@ export class GameScene extends Phaser.Scene {
     const currentAlive = new Set<string>();
     for (const [id, p] of Object.entries(state.players)) {
       if (p.status === "alive") currentAlive.add(id);
-      if (this.prevAlive.has(id) && p.status === "dead") sfx.sfxDeath();
+      // General check for other players
+      if (id !== myId && this.prevAlive.has(id) && p.status === "dead") sfx.sfxDeath();
     }
+    // Explicit self-check (prevAlive can miss it on first frame; this never does)
+    const selfPlayer = myId ? state.players[myId] : null;
+    if (selfPlayer && selfPlayer.status === "dead" && this.prevSelfStatus !== "dead") {
+      sfx.sfxDeath();
+    }
+    if (selfPlayer) this.prevSelfStatus = selfPlayer.status;
     this.prevAlive = currentAlive;
 
     // Remove departed
