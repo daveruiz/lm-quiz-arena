@@ -12,9 +12,9 @@ const JUMP_VZ = 9;           // initial upward velocity on jump (shorter arc)
 const GRAVITY = 1.2;         // downward acceleration per tick (snappier fall)
 const BOUNCE_FACTOR = 0.3;   // how much velocity transfers on landing bounce
 const PLAYER_RADIUS = 10;    // collision radius
-const PUSH_FORCE = 4;        // base push strength on collision
-const STOMP_PUSH = 8;        // extra push when landing on someone
-const BUMP_COOLDOWN = 5;     // ticks before same pair can bump again
+const PUSH_FORCE = 10;       // base push strength on collision
+const STOMP_PUSH = 16;       // extra push when landing on someone
+const BUMP_COOLDOWN = 3;     // ticks before same pair can bump again
 
 // ── Dynamic zone sizing ──────────────────────────────────────────────────────
 /** Zone centres – fixed quadrant midpoints */
