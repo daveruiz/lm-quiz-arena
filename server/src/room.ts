@@ -233,23 +233,30 @@ class Room {
       const isAirborne = p.z > 0.5;
       const speed = isAirborne ? AIR_SPEED : SPEED;
 
-      // Horizontal movement
-      p.x += p.inputX * speed;
-      p.y += p.inputY * speed;
+      // Stunned (just stomped): ignore all input for the duration
+      const stunned = p.stompedTimer > 0;
 
-      // Update facing direction based on dominant input axis
-      if (Math.abs(p.inputX) > 0.1 || Math.abs(p.inputY) > 0.1) {
-        if (Math.abs(p.inputY) >= Math.abs(p.inputX)) {
-          p.facing = p.inputY > 0 ? 0 : 2; // 0=down, 2=up
-        } else {
-          p.facing = p.inputX < 0 ? 1 : 3; // 1=left, 3=right
+      if (!stunned) {
+        // Horizontal movement
+        p.x += p.inputX * speed;
+        p.y += p.inputY * speed;
+
+        // Update facing direction based on dominant input axis
+        if (Math.abs(p.inputX) > 0.1 || Math.abs(p.inputY) > 0.1) {
+          if (Math.abs(p.inputY) >= Math.abs(p.inputX)) {
+            p.facing = p.inputY > 0 ? 0 : 2; // 0=down, 2=up
+          } else {
+            p.facing = p.inputX < 0 ? 1 : 3; // 1=left, 3=right
+          }
+        }
+
+        // Jump initiation (only from ground)
+        if (p.jumpRequested && p.z < 0.5) {
+          p.vz = JUMP_VZ;
         }
       }
 
-      // Jump initiation (only from ground)
-      if (p.jumpRequested && p.z < 0.5) {
-        p.vz = JUMP_VZ;
-      }
+      // Always consume jump request (prevents queued jump firing after stun ends)
       p.jumpRequested = false;
 
       // Gravity
