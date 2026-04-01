@@ -3,7 +3,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   server: {
     port: 5173,
-    host: true, // listen on 0.0.0.0 — allows access from any host / network IP
+    host: true,           // bind to 0.0.0.0
+    allowedHosts: "all",  // allow any Host header (including REDACTED)
     proxy: {
       "/socket.io": {
         target: "http://localhost:3000",
