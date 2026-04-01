@@ -4,7 +4,7 @@ import type { RoomState, Zone } from "./network";
 import defaultQuestions from "./questions.json";
 
 // ── Question-bank types & persistence ────────────────────────────────────────
-interface Preset {
+interface Question {
   text: string;
   A: string; B: string; C: string; D: string;
   correctZone: Zone;
@@ -12,17 +12,17 @@ interface Preset {
 
 const STORAGE_KEY = "quiz-arena-questions";
 
-function loadPresets(): Preset[] {
+function loadBank(): Question[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored) as Preset[];
+    if (stored) return JSON.parse(stored) as Question[];
   } catch { /* ignore corrupt data */ }
   // First run: seed from JSON and persist
   localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultQuestions));
-  return defaultQuestions as Preset[];
+  return defaultQuestions as Question[];
 }
 
-function savePresets(qs: Preset[]) {
+function saveBank(qs: Question[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(qs));
 }
 
@@ -82,26 +82,20 @@ export function initAdminPanel() {
       .btn-qa-C { background: #e9a045; color: #000; }
       .btn-qa-D { background: #16c79a; }
       .btn-qa.selected { outline: 3px solid #fff; }
-      /* Preset bank */
-      .preset-nav { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
-      .preset-nav .btn-arrow { background: #333; color: #fff; padding: 5px 10px; font-size: 1rem; margin-top: 0; }
-      .preset-nav .btn-arrow:disabled { opacity: .3; }
-      .preset-counter { flex: 1; text-align: center; font-size: .8rem; color: #888; }
-      #preset-preview {
-        background: #1a1a2e; border-radius: 6px; padding: 8px;
-        font-size: .8rem; color: #ccc; min-height: 36px; line-height: 1.4;
-        margin-bottom: 4px;
+      /* Question bank nav */
+      .q-nav {
+        display: flex; align-items: center; gap: 5px; margin-bottom: 8px;
       }
-      .preset-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-top: 4px; font-size: .72rem; }
-      .preset-answer { padding: 3px 5px; border-radius: 4px; opacity: .85; }
-      .pa-A { background: #e94560; color: #fff; }
-      .pa-B { background: #0f3460; color: #fff; }
-      .pa-C { background: #e9a045; color: #000; }
-      .pa-D { background: #16c79a; color: #000; }
-      .preset-correct { font-size: .72rem; color: #aaa; margin-top: 3px; }
-      .preset-actions { display: flex; gap: 5px; }
-      .btn-load { background: #2d6a4f; color: #fff; flex: 1; }
-      .btn-del  { background: #555;    color: #fff; padding: 8px 12px; }
+      .q-nav .btn-arrow {
+        background: #333; color: #fff; padding: 5px 10px;
+        font-size: 1rem; margin-top: 0; flex-shrink: 0;
+      }
+      .q-nav .btn-arrow:disabled { opacity: .3; cursor: default; }
+      .q-nav .q-counter {
+        flex: 1; text-align: center; font-size: .8rem; color: #888;
+      }
+      .q-nav .btn-add { background: #2d6a4f; color: #fff; padding: 5px 9px; margin-top: 0; }
+      .q-nav .btn-del { background: #555;    color: #fff; padding: 5px 9px; margin-top: 0; }
       #admin-status {
         margin-top: 8px; padding: 6px; border-radius: 6px;
         background: #16213e; font-size: .78rem; text-align: center; line-height: 1.5;
@@ -110,24 +104,20 @@ export function initAdminPanel() {
 
     <h3>⚙ Admin Panel</h3>
 
-    <label>Admin Key <span style="font-weight:normal;color:#666">(default: <code style="color:#aaa">secret</code> — set <code style="color:#aaa">ADMIN_KEY</code> env var to change)</span></label>
+    <label>Admin Key <span style="font-weight:normal;color:#666">(default: <code style="color:#aaa">secret</code>)</span></label>
     <input type="password" id="admin-key" placeholder="secret" value="secret" />
 
-    <!-- ── Question bank ──────────────────────────── -->
-    <h4>📋 Question Bank</h4>
-    <div class="preset-nav">
-      <button class="btn-arrow" id="btn-prev-q">◀</button>
-      <span class="preset-counter" id="preset-counter">— / —</span>
-      <button class="btn-arrow" id="btn-next-q">▶</button>
-    </div>
-    <div id="preset-preview">No questions in bank.</div>
-    <div class="preset-actions">
-      <button class="btn-load" id="btn-load-q">↓ Load into form</button>
-      <button class="btn-del"  id="btn-del-q" title="Remove this question">🗑</button>
+    <!-- ── Question bank + form (unified) ─────── -->
+    <h4>📋 Question</h4>
+    <div class="q-nav">
+      <button class="btn-arrow" id="btn-prev-q" title="Previous question">◀</button>
+      <span class="q-counter" id="q-counter">— / —</span>
+      <button class="btn-arrow" id="btn-next-q" title="Next question">▶</button>
+      <button class="btn-add"  id="btn-add-q"  title="Add new question">＋</button>
+      <button class="btn-del"  id="btn-del-q"  title="Delete this question">🗑</button>
     </div>
 
-    <!-- ── Full question form ──────────────────────── -->
-    <h4>Question</h4>
+    <label>Question text</label>
     <textarea id="admin-q" placeholder="e.g. What color is the sky?"></textarea>
     <label>A</label><input id="admin-a" placeholder="Option A" />
     <label>B</label><input id="admin-b" placeholder="Option B" />
@@ -168,93 +158,119 @@ export function initAdminPanel() {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const getKey = () => (document.getElementById("admin-key") as HTMLInputElement).value;
-  const val    = (id: string) => (document.getElementById(id) as HTMLInputElement).value;
+  const val    = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value;
 
-  // ── Preset bank ───────────────────────────────────────────────────────────
-  let presets = loadPresets();
-  let pIdx    = 0;
+  // ── Form element refs ────────────────────────────────────────────────────
+  const fQ       = document.getElementById("admin-q")       as HTMLTextAreaElement;
+  const fA       = document.getElementById("admin-a")       as HTMLInputElement;
+  const fB       = document.getElementById("admin-b")       as HTMLInputElement;
+  const fC       = document.getElementById("admin-c")       as HTMLInputElement;
+  const fD       = document.getElementById("admin-d")       as HTMLInputElement;
+  const fCorrect = document.getElementById("admin-correct") as HTMLSelectElement;
+  const qCounter = document.getElementById("q-counter")!;
+  const btnPrev  = document.getElementById("btn-prev-q")  as HTMLButtonElement;
+  const btnNext  = document.getElementById("btn-next-q")  as HTMLButtonElement;
+  const btnAdd   = document.getElementById("btn-add-q")   as HTMLButtonElement;
+  const btnDel   = document.getElementById("btn-del-q")   as HTMLButtonElement;
 
-  const ZONE_LABEL_COLORS: Record<Zone, string> = {
-    A: "#e94560", B: "#0f3460", C: "#e9a045", D: "#16c79a",
-  };
+  // ── Bank state ───────────────────────────────────────────────────────────
+  let bank: Question[] = loadBank();
+  let idx  = 0;
 
-  function renderPreset() {
-    const counter = document.getElementById("preset-counter")!;
-    const preview = document.getElementById("preset-preview")!;
-    const btnPrev = document.getElementById("btn-prev-q") as HTMLButtonElement;
-    const btnNext = document.getElementById("btn-next-q") as HTMLButtonElement;
-    const btnLoad = document.getElementById("btn-load-q") as HTMLButtonElement;
-    const btnDel  = document.getElementById("btn-del-q")  as HTMLButtonElement;
-
-    if (presets.length === 0) {
-      counter.textContent = "— / —";
-      preview.innerHTML = "<em style='color:#666'>No questions in bank</em>";
-      btnLoad.disabled = true;
-      btnDel.disabled  = true;
-      btnPrev.disabled = true;
-      btnNext.disabled = true;
-      return;
-    }
-
-    btnLoad.disabled = false;
-    btnDel.disabled  = false;
-    btnPrev.disabled = presets.length <= 1;
-    btnNext.disabled = presets.length <= 1;
-
-    const q = presets[pIdx];
-    counter.textContent = `${pIdx + 1} / ${presets.length}`;
-
-    const zoneColor = ZONE_LABEL_COLORS[q.correctZone];
-    preview.innerHTML = `
-      <div style="margin-bottom:5px">${q.text}</div>
-      <div class="preset-answers">
-        <div class="preset-answer pa-A">A: ${q.A}</div>
-        <div class="preset-answer pa-B">B: ${q.B}</div>
-        <div class="preset-answer pa-C">C: ${q.C}</div>
-        <div class="preset-answer pa-D">D: ${q.D}</div>
-      </div>
-      <div class="preset-correct">
-        ✅ Correct: <b style="color:${zoneColor}">${q.correctZone}</b>
-      </div>`;
+  /** Read the form into bank[idx] and persist */
+  function saveCurrentToBank() {
+    if (bank.length === 0) return;
+    bank[idx] = {
+      text: fQ.value,
+      A: fA.value, B: fB.value, C: fC.value, D: fD.value,
+      correctZone: fCorrect.value as Zone,
+    };
+    saveBank(bank);
   }
 
-  renderPreset();
+  /** Load bank[idx] into the form */
+  function loadFromBank() {
+    if (bank.length === 0) {
+      fQ.value = ""; fA.value = ""; fB.value = ""; fC.value = ""; fD.value = "";
+      fCorrect.value = "A";
+      return;
+    }
+    const q = bank[idx];
+    fQ.value = q.text;
+    fA.value = q.A; fB.value = q.B; fC.value = q.C; fD.value = q.D;
+    fCorrect.value = q.correctZone;
+  }
 
-  document.getElementById("btn-prev-q")!.addEventListener("click", () => {
-    if (presets.length === 0) return;
-    pIdx = (pIdx - 1 + presets.length) % presets.length;
-    renderPreset();
+  /** Update nav buttons and counter */
+  function renderNav() {
+    const n = bank.length;
+    qCounter.textContent = n === 0 ? "— / —" : `${idx + 1} / ${n}`;
+    btnPrev.disabled = n <= 1;
+    btnNext.disabled = n <= 1;
+    btnDel.disabled  = n === 0;
+  }
+
+  // ── Initial load ─────────────────────────────────────────────────────────
+  loadFromBank();
+  renderNav();
+
+  // ── Auto-save: any edit to the form immediately persists ─────────────────
+  // We debounce slightly so rapid typing doesn't hammer localStorage.
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveCurrentToBank, 300);
+  };
+  [fQ, fA, fB, fC, fD, fCorrect].forEach((el) =>
+    el.addEventListener("input", scheduleSave),
+  );
+  // select fires "change" not "input"
+  fCorrect.addEventListener("change", scheduleSave);
+
+  // ── Navigation ───────────────────────────────────────────────────────────
+  btnPrev.addEventListener("click", () => {
+    if (bank.length === 0) return;
+    saveCurrentToBank();
+    idx = (idx - 1 + bank.length) % bank.length;
+    loadFromBank();
+    renderNav();
   });
 
-  document.getElementById("btn-next-q")!.addEventListener("click", () => {
-    if (presets.length === 0) return;
-    pIdx = (pIdx + 1) % presets.length;
-    renderPreset();
+  btnNext.addEventListener("click", () => {
+    if (bank.length === 0) return;
+    saveCurrentToBank();
+    idx = (idx + 1) % bank.length;
+    loadFromBank();
+    renderNav();
   });
 
-  document.getElementById("btn-load-q")!.addEventListener("click", () => {
-    if (presets.length === 0) return;
-    const q = presets[pIdx];
-    (document.getElementById("admin-q") as HTMLTextAreaElement).value = q.text;
-    (document.getElementById("admin-a") as HTMLInputElement).value = q.A;
-    (document.getElementById("admin-b") as HTMLInputElement).value = q.B;
-    (document.getElementById("admin-c") as HTMLInputElement).value = q.C;
-    (document.getElementById("admin-d") as HTMLInputElement).value = q.D;
-    (document.getElementById("admin-correct") as HTMLSelectElement).value = q.correctZone;
+  // ── Add blank question ───────────────────────────────────────────────────
+  btnAdd.addEventListener("click", () => {
+    saveCurrentToBank(); // save whatever's in form first
+    const blank: Question = { text: "", A: "", B: "", C: "", D: "", correctZone: "A" };
+    bank.push(blank);
+    idx = bank.length - 1;
+    saveBank(bank);
+    loadFromBank();
+    renderNav();
+    fQ.focus();
   });
 
-  document.getElementById("btn-del-q")!.addEventListener("click", () => {
-    if (presets.length === 0) return;
-    presets.splice(pIdx, 1);
-    savePresets(presets);
-    if (pIdx >= presets.length) pIdx = Math.max(0, presets.length - 1);
-    renderPreset();
+  // ── Delete current question ──────────────────────────────────────────────
+  btnDel.addEventListener("click", () => {
+    if (bank.length === 0) return;
+    bank.splice(idx, 1);
+    if (idx >= bank.length) idx = Math.max(0, bank.length - 1);
+    saveBank(bank);
+    loadFromBank();
+    renderNav();
   });
 
   // ── Start question ────────────────────────────────────────────────────────
   document.getElementById("admin-start-btn")!.addEventListener("click", () => {
     const socket = getSocket();
     if (!socket) return;
+    saveCurrentToBank(); // ensure latest edits are in bank
     socket.emit("adminStartQuestion", {
       text: val("admin-q"),
       A: val("admin-a"), B: val("admin-b"),

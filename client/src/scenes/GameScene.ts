@@ -90,9 +90,10 @@ export class GameScene extends Phaser.Scene {
   private jumpBtnEl!: HTMLElement;
 
   // ── Pointer event handlers (stored for removal on shutdown) ─────────────
-  private pointerdownHandler!: (e: PointerEvent) => void;
-  private pointermoveHandler!: (e: PointerEvent) => void;
-  private pointerupHandler!: (e: PointerEvent) => void;
+  private pointerdownHandler!:   (e: PointerEvent) => void;
+  private pointermoveHandler!:   (e: PointerEvent) => void;
+  private pointerupHandler!:     (e: PointerEvent) => void;
+  private pointercancelHandler!: (e: PointerEvent) => void;
 
   private prevPhase: RoomPhase = "lobby";
   private prevAlive: Set<string> = new Set();
@@ -183,24 +184,40 @@ export class GameScene extends Phaser.Scene {
     this.joyStickEl     = document.getElementById("joy-stick-html")!;
     this.jumpBtnEl      = document.getElementById("jump-btn-html")!;
 
-    /** True if a pointer target is a UI widget we should not intercept */
-    const isUiTarget = (t: EventTarget | null): boolean => {
-      if (!t) return false;
-      return !!(t as HTMLElement).closest(
+    /** True if a pointer is on a UI widget we should not intercept for game input */
+    const isUiPointer = (e: PointerEvent): boolean =>
+      !!(e.target as HTMLElement | null)?.closest(
         "#hud, #admin-panel, #chat-bar, #qr-modal",
       );
+
+    /** True if (cx, cy) is inside the jump button's bounding rect */
+    const inJumpBtn = (cx: number, cy: number): boolean => {
+      const r = this.jumpBtnEl.getBoundingClientRect();
+      return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
     };
 
     /** Reposition an element so its centre is at (cx, cy) in viewport coords */
-    const centreAt = (el: HTMLElement, r: number, cx: number, cy: number) => {
-      el.style.left = `${cx - r}px`;
-      el.style.top  = `${cy - r}px`;
+    const centreAt = (el: HTMLElement, radius: number, cx: number, cy: number) => {
+      el.style.left = `${cx - radius}px`;
+      el.style.top  = `${cy - radius}px`;
     };
 
+    /** Reset joystick to idle (called on pointerup / pointercancel) */
+    const releaseJoy = () => {
+      this.joyId     = null;
+      this.joyActive = false;
+      this.joyDelta  = { x: 0, y: 0 };
+      // Snap stick back to base centre
+      centreAt(this.joyStickEl, JOY_STICK_R, this.joyOrigin.x, this.joyOrigin.y);
+    };
+
+    // We listen in the CAPTURE phase so we receive events even when Phaser's
+    // canvas has called setPointerCapture, which would otherwise redirect
+    // pointermove/pointerup to the canvas and away from document bubble phase.
     this.pointerdownHandler = (e: PointerEvent) => {
-      // Only react to touch (mouse/pen uses keyboard path)
       if (e.pointerType !== "touch") return;
-      if (isUiTarget(e.target)) return;
+      if (isUiPointer(e)) return;
+      e.preventDefault(); // prevent text selection, scroll, zoom
 
       // Reveal overlay on first touch
       if (!this.touchEverUsed) {
@@ -208,14 +225,14 @@ export class GameScene extends Phaser.Scene {
         this.touchOverlayEl.style.display = "block";
       }
 
-      if (e.target === this.jumpBtnEl && this.jumpBtnId === null) {
-        // Jump button pressed
+      if (inJumpBtn(e.clientX, e.clientY) && this.jumpBtnId === null) {
+        // Hit jump button (coordinate-based, works regardless of pointer capture)
         this.jumpBtnId = e.pointerId;
         this.touchJump = true;
         this.jumpBtnEl.classList.add("pressed");
-      } else if (this.joyId === null && e.target !== this.jumpBtnEl) {
+      } else if (this.joyId === null && !inJumpBtn(e.clientX, e.clientY)) {
         // Joystick: snap base to touch point
-        this.joyId = e.pointerId;
+        this.joyId     = e.pointerId;
         this.joyOrigin = { x: e.clientX, y: e.clientY };
         centreAt(this.joyBaseEl,  JOY_BASE_R,  e.clientX, e.clientY);
         centreAt(this.joyStickEl, JOY_STICK_R, e.clientX, e.clientY);
@@ -224,12 +241,14 @@ export class GameScene extends Phaser.Scene {
     };
 
     this.pointermoveHandler = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
       if (e.pointerId !== this.joyId || !this.joyActive) return;
-      const dx = e.clientX - this.joyOrigin.x;
-      const dy = e.clientY - this.joyOrigin.y;
+      e.preventDefault();
+      const dx   = e.clientX - this.joyOrigin.x;
+      const dy   = e.clientY - this.joyOrigin.y;
       const dist = Math.hypot(dx, dy);
       const clamped = Math.min(dist, JOY_MAX_DIST);
-      const angle = Math.atan2(dy, dx);
+      const angle   = Math.atan2(dy, dx);
       centreAt(
         this.joyStickEl, JOY_STICK_R,
         this.joyOrigin.x + Math.cos(angle) * clamped,
@@ -240,39 +259,44 @@ export class GameScene extends Phaser.Scene {
     };
 
     this.pointerupHandler = (e: PointerEvent) => {
-      if (e.pointerId === this.joyId) {
-        this.joyId     = null;
-        this.joyActive = false;
-        this.joyDelta  = { x: 0, y: 0 };
-        // Snap stick back to base centre
-        centreAt(this.joyStickEl, JOY_STICK_R, this.joyOrigin.x, this.joyOrigin.y);
-      }
+      if (e.pointerType !== "touch") return;
+      if (e.pointerId === this.joyId)     releaseJoy();
       if (e.pointerId === this.jumpBtnId) {
         this.jumpBtnId = null;
         this.jumpBtnEl.classList.remove("pressed");
       }
     };
 
-    document.addEventListener("pointerdown", this.pointerdownHandler);
-    document.addEventListener("pointermove", this.pointermoveHandler);
-    document.addEventListener("pointerup",   this.pointerupHandler);
+    // pointercancel fires when the OS takes over (notification, call, etc.)
+    // Without this the joystick gets permanently stuck.
+    this.pointercancelHandler = (e: PointerEvent) => {
+      if (e.pointerId === this.joyId)     releaseJoy();
+      if (e.pointerId === this.jumpBtnId) {
+        this.jumpBtnId = null;
+        this.jumpBtnEl.classList.remove("pressed");
+      }
+    };
+
+    // Use { capture: true } so we intercept before Phaser's setPointerCapture
+    // redirects events to the canvas element.
+    document.addEventListener("pointerdown",   this.pointerdownHandler,   { capture: true });
+    document.addEventListener("pointermove",   this.pointermoveHandler,   { capture: true });
+    document.addEventListener("pointerup",     this.pointerupHandler,     { capture: true });
+    document.addEventListener("pointercancel", this.pointercancelHandler, { capture: true });
 
     onState((state) => this.syncPlayers(state));
 
     // ── Chat bar keyboard wiring ──────────────────────────────────────────
     const chatBar   = document.getElementById("chat-bar")!;
     const chatInput = document.getElementById("chat-input") as HTMLInputElement;
-    const chatHint  = document.getElementById("chat-hint")!;
 
     const openChat = () => {
       chatBar.classList.add("active");
-      chatHint?.classList.remove("active");
       // defer focus so button-click event fully resolves before we steal focus
       setTimeout(() => chatInput.focus(), 0);
     };
     const closeChat = () => {
       chatBar.classList.remove("active");
-      chatHint.classList.add("active");
       chatInput.value = "";
       chatInput.blur();
     };
@@ -318,9 +342,10 @@ export class GameScene extends Phaser.Scene {
     this.events.on("shutdown", () => {
       window.removeEventListener("keydown", this.keydownHandler);
       window.removeEventListener("keyup",   this.keyupHandler);
-      document.removeEventListener("pointerdown", this.pointerdownHandler);
-      document.removeEventListener("pointermove", this.pointermoveHandler);
-      document.removeEventListener("pointerup",   this.pointerupHandler);
+      document.removeEventListener("pointerdown",   this.pointerdownHandler,   { capture: true });
+      document.removeEventListener("pointermove",   this.pointermoveHandler,   { capture: true });
+      document.removeEventListener("pointerup",     this.pointerupHandler,     { capture: true });
+      document.removeEventListener("pointercancel", this.pointercancelHandler, { capture: true });
     });
   }
 
