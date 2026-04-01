@@ -79,7 +79,8 @@ export interface ClientToServerEvents {
   }) => void;
   adminReveal: (data: { adminKey: string }) => void;
   adminReset:  (data: { adminKey: string }) => void;
-  adminAddBot: (data: { adminKey: string }) => void;
+  adminAddBot:     (data: { adminKey: string }) => void;
+  adminRemoveBots: (data: { adminKey: string }) => void;
 }
 
 export interface ServerToClientEvents {

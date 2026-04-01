@@ -98,6 +98,15 @@ io.on("connection", (socket) => {
     console.log(`🤖 Bot added: ${bot.nickname}`);
   });
 
+  socket.on("adminRemoveBots", (data) => {
+    if (data.adminKey !== ADMIN_KEY) {
+      socket.emit("error", "Invalid admin key");
+      return;
+    }
+    room.removeBots();
+    console.log("🤖 All bots removed");
+  });
+
   socket.on("chat", (data) => {
     if (!data?.text || typeof data.text !== "string") return;
     room.setChat(socket.id, data.text);

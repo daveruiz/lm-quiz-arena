@@ -111,6 +111,13 @@ class Room {
     return player;
   }
 
+  /** Remove all bot players */
+  removeBots() {
+    for (const id of Object.keys(this.botDirs)) {
+      this.removePlayer(id);
+    }
+  }
+
   /** Add a server-controlled bot player */
   addBot() {
     this.botCount++;

@@ -141,7 +141,10 @@ export function initAdminPanel() {
 
     <!-- ── Dev: bots ─────────────────────────────── -->
     <h4>🤖 Bots</h4>
-    <button class="btn-full" id="btn-add-bot" style="background:#6c5ce7;color:#fff">＋ Add Bot</button>
+    <div style="display:flex;gap:5px">
+      <button style="flex:1;background:#6c5ce7;color:#fff" id="btn-add-bot">＋ Add Bot</button>
+      <button style="flex:1;background:#555;color:#fff"    id="btn-remove-bots">✕ Remove Bots</button>
+    </div>
 
     <!-- ── Dev: quick correct-answer picker ───────── -->
     <h4>🧪 Dev: quick-fire test</h4>
@@ -321,9 +324,12 @@ export function initAdminPanel() {
     });
   });
 
-  // ── Add Bot ───────────────────────────────────────────────────────────────
+  // ── Add / Remove Bots ────────────────────────────────────────────────────
   document.getElementById("btn-add-bot")!.addEventListener("click", () => {
     getSocket()?.emit("adminAddBot" as never, { adminKey: getKey() });
+  });
+  document.getElementById("btn-remove-bots")!.addEventListener("click", () => {
+    getSocket()?.emit("adminRemoveBots" as never, { adminKey: getKey() });
   });
 
   // ── Live status ───────────────────────────────────────────────────────────
