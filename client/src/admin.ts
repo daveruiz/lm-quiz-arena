@@ -115,6 +115,7 @@ export function initAdminPanel() {
       <button class="btn-arrow" id="btn-next-q" title="Next question">▶</button>
       <button class="btn-add"  id="btn-add-q"  title="Add new question">＋</button>
       <button class="btn-del"  id="btn-del-q"  title="Delete this question">🗑</button>
+      <button class="btn-del"  id="btn-reset-bank" title="Reset to default questions" style="background:#e94560">↻</button>
     </div>
 
     <label>Question text</label>
@@ -179,6 +180,7 @@ export function initAdminPanel() {
   const btnNext  = document.getElementById("btn-next-q")  as HTMLButtonElement;
   const btnAdd   = document.getElementById("btn-add-q")   as HTMLButtonElement;
   const btnDel   = document.getElementById("btn-del-q")   as HTMLButtonElement;
+  const btnResetBank = document.getElementById("btn-reset-bank") as HTMLButtonElement;
 
   // ── Bank state ───────────────────────────────────────────────────────────
   let bank: Question[] = loadBank();
@@ -269,6 +271,17 @@ export function initAdminPanel() {
     bank.splice(idx, 1);
     if (idx >= bank.length) idx = Math.max(0, bank.length - 1);
     saveBank(bank);
+    loadFromBank();
+    renderNav();
+  });
+
+  // ── Reset to defaults ─────────────────────────────────────────────────────
+  btnResetBank.addEventListener("click", () => {
+    if (!confirm("Reset question bank to defaults? This will erase your custom questions.")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    bank = [...(defaultQuestions as Question[])];
+    saveBank(bank);
+    idx = 0;
     loadFromBank();
     renderNav();
   });

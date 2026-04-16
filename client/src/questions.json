@@ -1,42 +1,90 @@
 [
   {
-    "text": "What is the largest planet in the Solar System?",
-    "A": "Earth",
-    "B": "Saturn",
-    "C": "Mars",
-    "D": "Jupiter",
-    "correctZone": "D"
+    "text": "What's the most important thing to include when prompting an AI coding assistant?",
+    "A": "Your favorite color",
+    "B": "Clear context and requirements",
+    "C": "A polite greeting",
+    "D": "Your job title",
+    "correctZone": "B"
   },
   {
-    "text": "Which language runs natively in every web browser?",
-    "A": "Python",
-    "B": "Java",
-    "C": "JavaScript",
-    "D": "Swift",
+    "text": "Before using AI-generated code in production, you should…",
+    "A": "Ship it immediately",
+    "B": "Ask the AI if it's correct",
+    "C": "Review, test, and understand it",
+    "D": "Add more comments",
     "correctZone": "C"
   },
   {
-    "text": "How many sides does a hexagon have?",
-    "A": "5",
-    "B": "7",
-    "C": "8",
-    "D": "6",
-    "correctZone": "D"
+    "text": "What's a key risk of blindly copy-pasting AI-generated code?",
+    "A": "It might use tabs instead of spaces",
+    "B": "Security vulnerabilities and bugs",
+    "C": "It runs too fast",
+    "D": "It uses too many variables",
+    "correctZone": "B"
   },
   {
-    "text": "Which company manufactures the PlayStation console?",
-    "A": "Microsoft",
-    "B": "Nintendo",
-    "C": "Sony",
-    "D": "Sega",
+    "text": "When AI gives you a wrong answer, what's the best approach?",
+    "A": "Give up and write it yourself",
+    "B": "Ask the same question again",
+    "C": "Refine your prompt with more context",
+    "D": "Switch to a different AI",
     "correctZone": "C"
   },
   {
-    "text": "In what year was the first iPhone released?",
-    "A": "2005",
-    "B": "2006",
-    "C": "2007",
-    "D": "2008",
+    "text": "What should you NOT share with a public AI assistant?",
+    "A": "API keys and secrets",
+    "B": "Error messages",
+    "C": "Code architecture questions",
+    "D": "Library documentation",
+    "correctZone": "A"
+  },
+  {
+    "text": "How can AI best help with code reviews?",
+    "A": "Replace human reviewers entirely",
+    "B": "Auto-approve all PRs",
+    "C": "Catch patterns, suggest improvements, explain changes",
+    "D": "Only check for typos",
     "correctZone": "C"
+  },
+  {
+    "text": "When is AI LEAST helpful in development?",
+    "A": "Generating boilerplate code",
+    "B": "Making critical architecture decisions alone",
+    "C": "Writing unit tests",
+    "D": "Explaining unfamiliar code",
+    "correctZone": "B"
+  },
+  {
+    "text": "What's the best way to learn from AI-assisted coding?",
+    "A": "Never look at what it generates",
+    "B": "Understand WHY the code works, not just THAT it works",
+    "C": "Memorize every response",
+    "D": "Only use it for languages you already know",
+    "correctZone": "B"
+  },
+  {
+    "text": "Which practice improves AI-generated code quality the most?",
+    "A": "Asking in ALL CAPS",
+    "B": "Providing examples of expected input/output",
+    "C": "Using shorter prompts",
+    "D": "Asking on Fridays",
+    "correctZone": "B"
+  },
+  {
+    "text": "What's the recommended approach for AI in a team workflow?",
+    "A": "Only one person should use it",
+    "B": "Keep it secret from management",
+    "C": "Establish shared guidelines and be transparent",
+    "D": "Let the AI decide the workflow",
+    "correctZone": "C"
+  },
+  {
+    "text": "Are you enjoying working with AI in your day-to-day?",
+    "A": "Love it, can't go back!",
+    "B": "It's useful but I'm still learning",
+    "C": "Mixed feelings, honestly",
+    "D": "I prefer the old ways",
+    "correctZone": "A"
   }
 ]
