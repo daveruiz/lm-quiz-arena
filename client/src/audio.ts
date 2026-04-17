@@ -2,13 +2,28 @@
 // No external audio files needed — all sounds are synthesized on the fly.
 
 let ctx: AudioContext | null = null;
+let masterGain: GainNode | null = null;
 let _muted = false;
+
+/** Global volume multiplier (0..1) */
+const MASTER_VOLUME = 0.5;
 
 /** Lazy-init AudioContext (must happen after user gesture) */
 function getCtx(): AudioContext {
-  if (!ctx) ctx = new AudioContext();
+  if (!ctx) {
+    ctx = new AudioContext();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = MASTER_VOLUME;
+    masterGain.connect(ctx.destination);
+  }
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
+}
+
+/** Returns the master gain node (all sounds route through this) */
+function getDest(): AudioNode {
+  getCtx();
+  return masterGain!;
 }
 
 export function isMuted(): boolean { return _muted; }
@@ -33,7 +48,7 @@ function playTone(
   if (slide) osc.frequency.linearRampToValueAtTime(slide, c.currentTime + duration);
   gain.gain.setValueAtTime(volume, c.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
-  osc.connect(gain).connect(c.destination);
+  osc.connect(gain).connect(getDest());
   osc.start(c.currentTime);
   osc.stop(c.currentTime + duration);
 }
@@ -55,7 +70,7 @@ function playNoise(duration: number, volume: number = 0.08) {
   filter.type = "bandpass";
   filter.frequency.value = 200;
   filter.Q.value = 1;
-  source.connect(filter).connect(gain).connect(c.destination);
+  source.connect(filter).connect(gain).connect(getDest());
   source.start();
 }
 
